@@ -1,0 +1,3422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Montaje en sitio · Gantt hora por hora</title>
+<script>
+  // Aplicar tema antes del render para evitar flash
+  (function(){ try{ var t = localStorage.getItem("montajeTheme"); if(t==="light") document.documentElement.setAttribute("data-theme","light"); }catch(e){} })();
+</script>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --ink:#e7eaf0; --muted:#8a93a6;
+  --line:#2a2f3a; --accent:#ff7a1a; --ok:#36d399; --warn:#f5b400; --crit:#ef4444;
+  --bg-deep:#0c0e13;
+  --slot-even:#13161e;
+  --slot-odd:#191d27;
+  --slot-night:#10131a;
+  --mile-bg:#181a22;
+  --accent-soft:rgba(255,122,26,.12);
+  --header-grad:linear-gradient(135deg,#171a21,#1e1a12);
+  --bar-text:#fff;
+  --shadow:rgba(0,0,0,.3);
+}
+[data-theme="light"]{
+  color-scheme: light;
+  --bg:#f5f7fb;
+  --panel:#ffffff;
+  --panel2:#eef1f6;
+  --ink:#16191f;
+  --muted:#5c6472;
+  --line:#d7dbe4;
+  --accent:#ea580c;
+  --ok:#059669;
+  --warn:#b45309;
+  --crit:#dc2626;
+  --bg-deep:#ffffff;
+  --slot-even:#f7f9fc;
+  --slot-odd:#eef1f6;
+  --slot-night:#e8ebf2;
+  --mile-bg:#f8f9fc;
+  --accent-soft:rgba(234,88,12,.12);
+  --header-grad:linear-gradient(135deg,#ffffff,#fef3e8);
+  --bar-text:#14171c;
+  --shadow:rgba(15,23,42,.12);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;font-size:13px}
+header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--header-grad);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+header h1{font-size:17px;margin:0;letter-spacing:.2px}
+header h1 span{color:var(--accent)}
+header small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap}
+main{padding:14px 20px;max-width:1700px;margin:0 auto}
+details{margin-bottom:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+details > summary{padding:11px 16px;cursor:pointer;background:var(--panel2);font-weight:600;font-size:13px;list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+details > summary::-webkit-details-marker{display:none}
+details > summary::before{content:"▸";color:var(--accent);font-size:10px;transition:transform .15s;display:inline-block;width:10px}
+details[open] > summary::before{transform:rotate(90deg)}
+details > summary .sum-title{flex:1;display:flex;align-items:center;gap:10px}
+details > summary small{color:var(--muted);font-weight:400;font-size:11px}
+details .body{padding:14px 16px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.5px;background:var(--panel2)}
+tr:last-child td{border-bottom:0}
+
+input,select,textarea{background:var(--bg-deep);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px;font-family:inherit}
+
+/* Campos bloqueados: doble-clic para editar */
+main input.locked, main select.locked, main textarea.locked{
+  cursor:pointer !important;
+  caret-color:transparent;
+  user-select:none;
+}
+main input.locked:hover, main select.locked:hover, main textarea.locked:hover{
+  border-color:var(--accent);
+}
+input[type="number"]{width:64px}
+input[type="time"]{width:90px}
+input[type="datetime-local"]{width:175px}
+input[type="color"]{width:34px;height:26px;padding:0;cursor:pointer}
+input[type="text"]{width:100%}
+select{cursor:pointer}
+textarea{width:100%;min-height:36px;resize:vertical}
+
+button{background:var(--accent);color:#111;border:0;padding:7px 12px;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px}
+button:hover{filter:brightness(1.08)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.ghost:hover{border-color:var(--accent);color:var(--accent)}
+button.ghost.active-choice{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:700;box-shadow:0 0 0 2px rgba(255,122,26,.25),0 1px 3px rgba(255,122,26,.3) inset}
+button.add{background:rgba(54,211,153,.15);color:var(--ok);border:1px dashed var(--ok);padding:5px 10px;font-size:11.5px}
+button.del{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);color:#ef4444;cursor:pointer;font-size:12px;font-weight:700;padding:2px 7px;border-radius:4px;line-height:1.2;transition:all .12s}
+button.del:hover{background:#ef4444;color:#fff;border-color:#ef4444}
+button.del:active{transform:scale(0.94)}
+
+button.hito-btn{background:rgba(255,122,26,.08);border:1px solid rgba(255,122,26,.4);color:var(--accent);cursor:pointer;font-size:12px;font-weight:800;padding:2px 9px;border-radius:4px;line-height:1.2;transition:all .12s;font-family:"Helvetica Neue",Arial,sans-serif}
+button.hito-btn:hover{background:var(--accent);color:#111;border-color:var(--accent)}
+button.hito-btn.active{background:var(--accent);color:#111;border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,122,26,.25)}
+button.hito-btn.active:hover{background:rgba(255,122,26,.6);border-color:rgba(255,122,26,.8)}
+button.hito-btn:active{transform:scale(0.94)}
+
+button.crit-btn{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.4);color:var(--crit);cursor:pointer;font-size:14px;font-weight:900;padding:2px 9px;border-radius:4px;line-height:1.2;transition:all .12s;font-family:"Helvetica Neue",Arial,sans-serif}
+button.crit-btn:hover{background:var(--crit);color:#fff;border-color:var(--crit)}
+button.crit-btn.active{background:var(--crit);color:#fff;border-color:var(--crit);box-shadow:0 0 0 2px rgba(239,68,68,.25)}
+button.crit-btn.active:hover{background:rgba(239,68,68,.7);border-color:rgba(239,68,68,.8)}
+button.crit-btn:active{transform:scale(0.94)}
+
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.pill.crit{background:rgba(239,68,68,.2);color:#ffb3b3}
+.pill.warn{background:rgba(245,180,0,.2);color:#ffd97a}
+.pill.ok{background:rgba(54,211,153,.2);color:#b3f0d9}
+
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi .card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:11px 13px}
+.kpi .card .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.kpi .card .v{font-size:17px;font-weight:700;margin-top:3px}
+.kpi .card .v.crit{color:var(--crit)} .kpi .card .v.warn{color:var(--warn)} .kpi .card .v.ok{color:var(--ok)}
+
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.toolbar label{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
+
+/* GANTT — layout dos paneles */
+.gantt-wrap{
+  display:flex;
+  border:1px solid var(--line);border-radius:8px;
+  background:var(--bg-deep);
+  max-height:620px;
+  overflow:hidden;
+}
+/* Panel izquierdo: labels fijos */
+.gantt-labels{
+  width:220px;
+  min-width:220px;
+  flex-shrink:0;
+  overflow:hidden;
+  border-right:2px solid var(--line);
+  background:var(--panel);
+  display:flex;
+  flex-direction:column;
+}
+.gantt-labels .gl-hdr{
+  background:var(--panel2);
+  border-bottom:1px solid var(--line);
+  font-size:10px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.5px;font-weight:700;
+  padding:6px 10px;
+  flex-shrink:0;
+}
+.gantt-labels .gl-hdr.gl-hdr-mile{
+  background:var(--mile-bg);
+  border-top:1px solid var(--line);
+}
+.gantt-labels .gl-body{overflow:hidden;flex:1}
+.gantt-labels .gl-row{
+  padding:5px 10px;
+  font-size:11.5px;
+  display:flex;align-items:center;gap:6px;
+  border-bottom:1px solid var(--line);
+  min-height:30px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  position:relative;
+}
+.gantt-labels .gl-row .gl-add-sub{
+  display:none;
+  flex-shrink:0;
+  background:var(--accent-soft);
+  border:1px solid rgba(255,122,26,.5);
+  color:var(--accent);
+  border-radius:3px;
+  font-size:11px;font-weight:800;
+  padding:0px 5px;line-height:18px;
+  cursor:pointer;
+  transition:all .12s;
+}
+.gantt-labels .gl-row:hover .gl-add-sub{display:inline-block}
+.gantt-labels .gl-row .gl-add-sub:hover{background:var(--accent);color:#111}
+/* Flecha toggle subtareas en Gantt */
+.gl-sub-arrow{
+  flex-shrink:0;width:16px;text-align:center;
+  font-size:10px;cursor:pointer;color:var(--accent);
+  transition:transform .15s;user-select:none;
+}
+.gl-sub-arrow.open{color:var(--accent)}
+.gl-sub-arrow.empty{color:transparent;cursor:default;pointer-events:none}
+.gantt-labels .gl-row.gl-sub{
+  font-size:10.5px;color:var(--muted);
+  padding-left:20px;
+  min-height:26px;
+  background:var(--bg-deep);
+  border-bottom:1px dashed var(--line);
+}
+.gantt-labels .gl-row.gl-sub:last-child{border-bottom:0}
+.gantt-labels .gl-row .gl-name{flex:1;overflow:hidden;text-overflow:ellipsis}
+.gantt-labels .gl-row .gl-id{color:var(--muted);font-size:10px;white-space:nowrap;flex-shrink:0}
+
+/* Panel derecho: scroll horizontal + vertical */
+.gantt-bars{
+  flex:1;
+  overflow:auto;
+  position:relative;
+}
+/* Grid de barras */
+.gantt-grid{display:flex;flex-direction:column;min-width:max-content}
+.gantt-grid .gg-hdr-day{
+  position:sticky;top:0;z-index:5;
+  display:flex;
+  background:var(--panel2);
+  border-bottom:1px solid var(--line);
+  min-height:44px;
+}
+.gantt-grid .gg-hdr-hour{
+  position:sticky;top:44px;z-index:4;
+  display:flex;
+  background:var(--panel2);
+  border-bottom:1px solid var(--line);
+  min-height:28px;
+}
+.gantt-grid .gg-hdr-mile{
+  position:sticky;z-index:3;
+  background:var(--mile-bg);
+  border-bottom:1px solid var(--line);
+  min-height:28px;
+  display:flex;position:relative;
+}
+.gantt-grid .gg-day-cell{
+  font-size:10px;font-weight:700;
+  color:var(--accent);
+  background:var(--accent-soft);
+  border-right:1px solid rgba(255,122,26,.35);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  line-height:1.25;text-transform:uppercase;
+  flex-shrink:0;
+}
+.gantt-grid .gg-day-cell.we{background:rgba(255,122,26,.22)}
+.gantt-grid .gg-hour-cell{
+  font-size:10px;font-weight:700;color:var(--ink);
+  font-family:ui-monospace,monospace;
+  border-right:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.gantt-grid .gg-hour-cell.even{background:var(--slot-even)}
+.gantt-grid .gg-hour-cell.odd{background:var(--slot-odd)}
+/* filas de datos */
+.gantt-grid .gg-row{
+  position:relative;
+  display:flex;
+  border-bottom:1px solid var(--line);
+  min-height:30px;
+  overflow:hidden;
+}
+.gantt-grid .gg-row.gg-sub{
+  min-height:26px;
+  background:var(--bg-deep);
+  border-bottom:1px dashed var(--line);
+}
+.gantt-grid .gg-row.gg-mile-row{
+  min-height:28px;
+  background:var(--mile-bg);
+}
+.gantt-grid .gg-cell{
+  flex-shrink:0;
+  border-right:1px solid #161920;
+}
+.gantt-grid .gg-cell.night{background:var(--slot-night)}
+.gantt-grid .gg-cell.we{background:rgba(255,122,26,.06)}
+/* barras */
+.gantt-grid .bar{
+  position:absolute;top:3px;height:24px;border-radius:5px;
+  color:#fff;font-size:11px;font-weight:600;
+  padding:3px 11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  display:flex;align-items:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.35);
+  cursor:grab;user-select:none;touch-action:none;
+  text-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+.gantt-grid .bar:hover{filter:brightness(1.08)}
+.gantt-grid .bar.dragging{cursor:grabbing;opacity:.9;z-index:20;filter:brightness(1.15)}
+.gantt-grid .bar.crit{outline:2px solid #ffd97a;outline-offset:-2px}
+.gantt-grid .bar.done{opacity:.5;background:linear-gradient(45deg,#4b5563,#374151)!important;text-decoration:line-through}
+.gantt-grid .bar .handle{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}
+.gantt-grid .bar .handle-l{left:0}.gantt-grid .bar .handle-r{right:0}
+.gantt-grid .bar:hover .handle{background:rgba(0,0,0,.3)}
+.gantt-grid .bar.sub-gantt-bar{top:3px;height:20px;font-size:10.5px;font-weight:600;border-radius:3px;color:var(--ink);text-shadow:none;box-shadow:none}
+.gantt-grid .bar.sub-gantt-bar .handle{background:rgba(0,0,0,.12)}
+.gantt-grid .bar.sub-gantt-bar:hover .handle{background:rgba(0,0,0,.3)}
+.gantt-grid .milestone{
+  position:absolute;top:4px;
+  font-size:10px;color:var(--accent);white-space:nowrap;
+  transform:translateX(-50%);
+  background:var(--mile-bg);padding:2px 7px;
+  border:1px solid var(--accent);border-radius:99px;font-weight:700;z-index:2;
+}
+.gantt-grid .milestone::before{content:"◆ "}
+
+.legend{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:11px;align-items:center}
+.legend .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}
+
+/* Filtro de recursos arriba del Gantt */
+.gantt-filter{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;padding:8px 10px;background:var(--panel2);border-radius:6px;border:1px solid var(--line)}
+.gantt-filter .flabel{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-right:4px}
+.gantt-filter .fchip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:99px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .12s;user-select:none}
+.gantt-filter .fchip:hover{filter:brightness(1.1)}
+.gantt-filter .fchip.off{background:transparent!important;border-color:var(--line);color:var(--muted);opacity:.5}
+.gantt-filter .fchip.off:hover{opacity:.8;border-color:var(--muted)}
+.gantt-filter .fchip .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor}
+.gantt-filter .fbtn{padding:4px 9px;background:transparent;border:1px solid var(--line);border-radius:99px;font-size:10.5px;color:var(--muted);cursor:pointer;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.gantt-filter .fbtn:hover{border-color:var(--accent);color:var(--accent)}
+
+.task-res-editor{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.task-res-editor .chip{display:inline-flex;align-items:center;gap:3px;padding:1px 4px 1px 6px;border-radius:4px;font-size:10.5px;color:#111;font-weight:600}
+.task-res-editor .chip input{width:36px;background:rgba(0,0,0,.15);color:#111;border:0;font-weight:700}
+.task-res-editor .chip button{background:none;border:0;color:#111;cursor:pointer;font-size:12px;padding:0 2px}
+
+.check{display:grid;grid-template-columns:22px 1fr 160px 80px 30px;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);align-items:center}
+.check input[type="checkbox"]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.check.done{opacity:.45;text-decoration:line-through}
+.check .when{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted)}
+
+.risk-item{display:grid;grid-template-columns:110px 1fr 30px;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);align-items:start}
+
+/* Drag & drop para reordenar filas */
+.drag-handle{
+  cursor:grab;color:var(--muted);text-align:center;user-select:none;
+  font-size:16px;line-height:1;width:28px;font-weight:700;
+  padding:0 6px;border-radius:4px;transition:all .1s;
+}
+.drag-handle:hover{color:var(--accent);background:var(--panel2)}
+.drag-handle:active{cursor:grabbing;color:var(--accent)}
+.drag-handle.dragging-source{opacity:.35}
+.move-btn{background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:1px 3px;line-height:1;border-radius:3px;transition:all .1s}
+.move-btn:hover:not([disabled]){background:var(--panel2);color:var(--accent)}
+.move-btn[disabled]{opacity:.2;cursor:default}
+tbody tr.dragging{opacity:.4;background:var(--panel2)}
+tbody tr.drag-over-top{box-shadow:inset 0 3px 0 0 var(--accent)}
+tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
+
+.section-header{margin:0 0 10px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:6px}
+.contact-card{display:grid;grid-template-columns:130px 1fr 30px;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:center}
+.contact-body{display:grid;grid-template-columns:1fr 170px auto;gap:8px;align-items:center}
+.contact-body .note-line{grid-column:1/-1}
+.contact-body .note-line input{width:100%;background:transparent;border:0;border-bottom:1px dashed var(--line);padding:3px 2px;color:var(--muted);font-size:11px}
+.btn-action{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:6px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);text-decoration:none;font-size:11px;font-weight:600}
+.btn-action.wa{background:rgba(37,211,102,.1);border-color:rgba(37,211,102,.35);color:#25d366}
+.btn-action.call{background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.35);color:#60a5fa}
+.btn-action.disabled{opacity:.3;pointer-events:none}
+
+.sdata-row{display:grid;grid-template-columns:150px 180px 1fr 30px;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);align-items:center}
+.sdata-row select.cat-pill{padding:5px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;text-align:center}
+
+/* SUBTAREAS */
+.subtask-panel{background:var(--bg-deep);border-top:2px solid var(--accent-soft);padding:0}
+.subtask-panel .sub-hdr{display:flex;align-items:center;gap:8px;padding:7px 16px 7px 48px;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;border-bottom:1px solid var(--line);background:var(--panel2)}
+.subtask-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.subtask-table th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.5px;background:var(--panel2);padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}
+.subtask-table td{padding:5px 8px;border-bottom:1px dashed var(--line);vertical-align:middle}
+.subtask-table tr:last-child td{border-bottom:0}
+.subtask-table input[type="text"]{width:100%}
+.subtask-table input[type="number"]{width:64px}
+.subtask-table input[type="date"]{width:115px}
+.subtask-done-check{width:16px;height:16px;accent-color:var(--ok);cursor:pointer}
+/* Toggle subtareas — flecha al inicio de la fila */
+.sub-arrow{
+  display:flex;align-items:center;justify-content:center;
+  width:22px;height:22px;flex-shrink:0;
+  cursor:pointer;border-radius:4px;
+  color:var(--muted);font-size:11px;
+  transition:all .15s;user-select:none;
+  border:1px solid transparent;
+}
+.sub-arrow:hover{background:var(--panel2);border-color:var(--line);color:var(--ink)}
+.sub-arrow.has-sub{color:var(--accent)}
+.sub-arrow.is-open{color:var(--accent);background:var(--accent-soft);border-color:rgba(255,122,26,.4)}
+.sub-arrow.no-sub{color:var(--line);cursor:default}
+.sub-arrow.no-sub:hover{background:none;border-color:transparent;color:var(--line)}
+.subtask-toggle{cursor:pointer;background:none;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:11px;padding:1px 6px;font-weight:700;transition:all .12s;white-space:nowrap}
+.subtask-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.subtask-toggle.has-sub{background:var(--accent-soft);color:var(--accent);border-color:rgba(255,122,26,.5)}
+/* fin calculado */
+.task-end-col{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.task-end-col b{color:var(--ok);font-size:11px}
+/* done badge en gantt */
+.gantt .bar.done-sub{opacity:.55;background:linear-gradient(45deg,#3d4856,#2e3744)!important;text-decoration:line-through}
+/* selector dur unit */
+.dur-unit-select{width:46px!important;padding:4px 2px!important;font-size:11px!important;text-align:center}
+
+/* Nivel 3 — sub-subtareas */
+.subtask-table tr.lvl3-row td{ background:rgba(0,0,0,.18); }
+.subtask-table tr.lvl3-row{ border-bottom:1px dotted var(--line) }
+.gl-sub2{ font-size:10px; color:var(--muted); padding-left:36px !important; min-height:22px !important; background:rgba(0,0,0,.15) }
+.gl-sub2 .gl-name{ font-size:10px }
+.gg-row.gg-sub2{ min-height:20px; background:rgba(0,0,0,.18); border-bottom:1px dotted var(--line) }
+.gantt-grid .bar.sub2-gantt-bar{ top:2px; height:16px; font-size:9.5px; border-radius:2px; border-style:dotted !important }
+.gantt .row.sub-gantt-row{background:var(--bg-deep);min-height:26px;border-bottom:1px dashed var(--line)}
+.gantt .label.sub-gantt-label{font-size:10.5px;color:var(--muted);padding-left:22px;min-height:26px}
+.gantt .bar.sub-gantt-bar{border-radius:3px;font-size:10px;height:20px;top:3px}
+/* Toggle día/hora en toolbar Gantt */
+.gantt-mode-btn{padding:4px 10px;font-size:11px;font-weight:700;border-radius:4px}
+
+.meeting-row{display:grid;grid-template-columns:32px 22px 1fr 30px;gap:8px;padding:5px 10px;border-bottom:1px solid var(--line);align-items:center}
+.meeting-row:last-child{border-bottom:0}
+.meeting-row .meeting-num{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);text-align:right;font-weight:700}
+.meeting-row input[type="checkbox"]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;justify-self:center}
+.meeting-row.done input[type="text"]{text-decoration:line-through;color:var(--muted);opacity:.6}
+.meeting-row.done .meeting-num{opacity:.4}
+
+.muted{color:var(--muted)}
+.hr{height:1px;background:var(--line);margin:10px 0}
+.countdown{font-family:ui-monospace,monospace;font-size:18px;font-weight:700;color:var(--accent);text-align:right}
+.countdown small{display:block;font-size:9px;color:var(--muted);font-weight:400;text-transform:uppercase;margin-top:2px}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--ok);color:#111;padding:10px 16px;border-radius:6px;font-weight:600;font-size:12px;z-index:99}
+
+/* HOME VIEW */
+.home-intro{color:var(--muted);font-size:13px;margin:0 0 16px;max-width:700px;line-height:1.5}
+.home-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+.home-toolbar button{padding:10px 16px;font-size:13px}
+.home-toolbar .primary{background:var(--accent);color:#111;font-weight:700}
+.projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.project-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;transition:all .15s;cursor:pointer;position:relative}
+.project-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.2)}
+.project-card h3{margin:0;font-size:15px;color:var(--accent);font-weight:700;padding-right:60px}
+.project-card .pc-meta{font-size:11.5px;color:var(--muted);line-height:1.5}
+.project-card .pc-meta b{color:var(--ink);font-weight:600}
+.project-card .pc-stats{display:flex;gap:10px;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;padding-top:8px;border-top:1px solid var(--line)}
+.project-card .pc-stats span b{color:var(--ink);font-size:12.5px}
+.project-card .pc-actions{position:absolute;top:12px;right:12px;display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.project-card:hover .pc-actions{opacity:1}
+.project-card .pc-actions button{padding:4px 8px;font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:4px;cursor:pointer}
+.project-card .pc-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.project-card .pc-actions button.danger:hover{border-color:#ef4444;color:#ef4444}
+.empty-projects{padding:60px 20px;text-align:center;color:var(--muted);border:2px dashed var(--line);border-radius:10px;background:var(--panel)}
+.empty-projects h2{color:var(--ink);font-size:18px;margin:0 0 8px}
+
+/* Modal simple */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-bg.hidden{display:none}
+.modal-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:500px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.modal-box h3{margin:0 0 14px;color:var(--accent);font-size:16px}
+.modal-box label{display:block;font-size:11.5px;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.5px}
+.modal-box input[type="text"],.modal-box select{width:100%;padding:8px 10px;font-size:13px}
+.modal-box .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+/* ── FIREBASE SYNC ── */
+/* ── FIREBASE SYNC ── */
+/* Indicador de sync */
+.sync-dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--ok);margin-right:4px;transition:background .3s;
+}
+.sync-dot.syncing{background:var(--warn);animation:pulse .8s infinite alternate;}
+.sync-dot.error{background:var(--crit);}
+@keyframes pulse{from{opacity:.5}to{opacity:1}}
+/* Spinner overlay ligero */
+#fbSpinner{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:8000;
+  display:flex;align-items:center;justify-content:center;
+}
+#fbSpinner.hidden{display:none}
+.spinner-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:28px 36px;text-align:center;font-size:13px;color:var(--muted)}
+.spinner-ring{width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- Spinner de carga Firebase -->
+<div id="fbSpinner">
+  <div class="spinner-box">
+    <div class="spinner-ring"></div>
+    Conectando con Firebase…
+  </div>
+</div>
+
+<!-- Logo precargado (oculto) para exportar como dataURL en el PDF -->
+<img id="logoImg" src="logo.png" alt="" style="display:none;position:absolute;pointer-events:none">
+
+<header>
+  <!-- HEADER HOME -->
+  <div id="headerHome">
+    <h1>ANIMAL <span>PROYECTOS</span></h1>
+    <small>Matriz de montaje · eventos · producción</small>
+  </div>
+  <!-- HEADER MONTAJE -->
+  <div id="headerMontaje" style="display:none">
+    <h1>MONTAJE <span>EN SITIO</span></h1>
+    <small id="subheader">—</small>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="countdown" id="countdown" style="display:none">—<small>al hito</small></div>
+    <div class="top-actions">
+            <button class="ghost" id="backToHomeBtn" onclick="showHome()" title="Volver a la lista de proyectos" style="display:none;padding:6px 12px">← Proyectos</button>
+      <span class="sync-dot" id="syncDot" title="Estado de sincronización"></span>
+      <button id="btnSave" onclick="manualSave()" style="background:var(--ok);color:#111;border:0;font-weight:700;display:none" title="Guardar cambios">💾 Guardar</button>
+      <button class="ghost" id="themeBtn" onclick="toggleTheme()" title="Cambiar tema claro/oscuro" style="font-size:14px;padding:6px 10px">🌙</button>
+      <button class="ghost" id="btnExpandAll" onclick="expandAll()" title="Abrir todas las secciones" style="padding:6px 10px;font-size:14px;display:none">▼</button>
+      <button class="ghost" id="btnCollapseAll" onclick="collapseAll()" title="Cerrar todas las secciones" style="padding:6px 10px;font-size:14px;display:none">▲</button>
+      <button class="ghost" id="btnPDF" onclick="exportPDF()" title="Generar resumen imprimible / PDF" style="display:none">📄 PDF</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- HOME VIEW -->
+<div id="viewHome">
+  <p class="home-intro">Matriz reutilizable de montaje en sitio. Los proyectos se guardan en la nube y se sincronizan en tiempo real entre todos los que tengan el link.</p>
+  <div class="home-toolbar">
+    <button class="primary" onclick="newProjectModal()">+ Crear proyecto nuevo</button>
+    <button class="ghost" onclick="importProjectJSON()">📁 Importar JSON</button>
+    <button class="ghost" onclick="openBackupModal()" style="margin-left:auto;border-color:var(--warn);color:var(--warn)" title="Backup y restore de todos los proyectos">🛡 Backup / Restore</button>
+  </div>
+  <div id="projectsGrid"></div>
+</div>
+
+<!-- MONTAJE VIEW (oculto por default) -->
+<div id="viewMontaje" style="display:none">
+
+<details open>
+  <summary><span class="sum-title">① Ficha / info general</span></summary>
+  <div class="body">
+    <div class="toolbar">
+      <label>Nombre: <input type="text" id="projName" style="width:260px"></label>
+      <label>Predio: <input type="text" id="projLoc" style="width:200px"></label>
+      <label>Tipo:
+        <select id="projType" onchange="setProjectType(this.value)" style="font-weight:700">
+          <option value="montaje">⚡ Montaje</option>
+          <option value="permanentes">🏗 Permanentes</option>
+        </select>
+      </label>
+      <button class="ghost" onclick="recoverLuccianos()" style="border-color:#f87171;color:#f87171;margin-left:12px" title="Restaurar backup de LUCCIANOS AL RIO">🔄 Restaurar backup</button>
+    </div>
+    <div class="toolbar">
+      <label><b>Ingreso predio:</b>
+        <input type="date" id="mStartDate" lang="en-GB" style="width:130px">
+        <input type="text" id="mStartTime" placeholder="HH:MM" maxlength="5" pattern="\d{1,2}:\d{2}" style="width:70px;font-family:ui-monospace,monospace;text-align:center" title="Formato 24 h: HH:MM">
+      </label>
+      <label><b>Hito final:</b>
+        <input type="date" id="mEndDate" lang="en-GB" style="width:130px">
+        <input type="text" id="mEndTime" placeholder="HH:MM" maxlength="5" pattern="\d{1,2}:\d{2}" style="width:70px;font-family:ui-monospace,monospace;text-align:center" title="Formato 24 h: HH:MM">
+      </label>
+      <button class="ghost" onclick="fitTasksToProject()" title="Desplaza todas las tareas para que arranquen en 'Ingreso predio' manteniendo sus duraciones">⇤ Ajustar tareas al evento</button>
+    </div>
+    <div class="toolbar">
+      <label><b>Jornada (modo hora):</b> se configura en el panel Gantt al activar vista por hora.</label>
+    </div>
+    <div class="kpi" id="kpi"></div>
+  </div>
+</details>
+
+<details open>
+  <summary><span class="sum-title">② Gantt <small id="gInfo"></small></span></summary>
+  <div class="body">
+    <div class="toolbar" style="margin-bottom:8px">
+      <span style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Vista:</span>
+      <button class="ghost gantt-mode-btn active-choice" id="btnGanttDay" onclick="setGanttMode('day')">📅 Por día</button>
+      <button class="ghost gantt-mode-btn" id="btnGanttHour" onclick="setGanttMode('hour')">🕐 Por hora</button>
+    </div>
+    <div id="jornadaControls" style="display:none">
+      <div class="toolbar" style="margin-bottom:8px">
+        <label><b>Jornada visible:</b>
+          <input type="text" id="dayStart" value="07:00" placeholder="HH:MM" maxlength="5" style="width:70px;font-family:ui-monospace,monospace;text-align:center">
+          –
+          <input type="text" id="dayEnd" value="22:00" placeholder="HH:MM" maxlength="5" style="width:70px;font-family:ui-monospace,monospace;text-align:center">
+        </label>
+        <button class="ghost" id="btnJornada24" onclick="setJornada24()">24 h</button>
+        <button class="ghost" id="btnJornadaDefault" onclick="setJornadaDefault()">07-22</button>
+        <label><input type="checkbox" id="compressNight" checked> Ocultar fuera de jornada</label>
+        <label>Agrupar: <select id="hourGroup"><option value="1">1h</option><option value="2">2h</option><option value="6">6h</option></select></label>
+      </div>
+    </div>
+    <div class="gantt-filter" id="ganttFilter"></div>
+    <div class="gantt-wrap">
+      <div class="gantt-labels" id="ganttLabels">
+        <!-- llenado por renderGantt -->
+      </div>
+      <div class="gantt-bars" id="ganttBars">
+        <div class="gantt-grid" id="gantt"></div>
+      </div>
+    </div>
+  </div>
+</details>
+
+<details>
+  <summary><span class="sum-title">③ Recursos disponibles <small id="rCount"></small></span></summary>
+  <div class="body">
+    <table id="resourcesTable"></table>
+    <div class="hr"></div>
+    <button class="add" onclick="addResource()">+ Agregar recurso</button>
+  </div>
+</details>
+
+<details open>
+  <summary><span class="sum-title">④ Tareas <small id="tCount"></small></span></summary>
+  <div class="body">
+    <table id="tasksTable"></table>
+    <div class="hr"></div>
+    <button class="add" onclick="addTask()">+ Agregar tarea</button>
+    <button class="ghost" onclick="autoSchedule()" title="Recalcula las fechas de inicio según las dependencias">Auto-calcular por dependencias</button>
+    <button class="ghost" onclick="renumberTaskIds()" title="Reasigna IDs M01, M02… según el orden actual. Remapea dependencias automáticamente.">🔢 Renumerar IDs</button>
+    <button class="ghost" onclick="loadPreset()" style="background:var(--accent);color:#111;border:0;font-weight:700">⬇ Cargar preset Colapinto completo</button>
+  </div>
+</details>
+
+<details>
+  <summary><span class="sum-title">⑤ Hitos <small id="hCount"></small></span></summary>
+  <div class="body">
+    <p class="muted" style="margin:0 0 8px">Momentos fijos en el Gantt (marcador ◆). Las tareas marcadas como "Hito" en la tabla de tareas también aparecen acá.</p>
+    <div id="milestonesList"></div>
+    <button class="add" onclick="addMilestone()">+ Agregar hito</button>
+  </div>
+</details>
+
+<details>
+  <summary><span class="sum-title">⑥ Checklist <small>cuenta regresiva al hito final</small></span></summary>
+  <div class="body">
+    <div id="checklist"></div>
+    <div class="hr"></div>
+    <button class="add" onclick="addCheck()">+ Agregar ítem</button>
+  </div>
+</details>
+
+<details>
+  <summary><span class="sum-title">⑦ Riesgos posibles + plan B</span></summary>
+  <div class="body">
+    <div id="risksList"></div>
+    <button class="add" onclick="addRisk()">+ Agregar riesgo</button>
+  </div>
+</details>
+
+<details>
+  <summary><span class="sum-title">⑧ Notas (contactos + datos + reunión técnica)</span></summary>
+  <div class="body">
+    <div class="section-header">📞 Contactos clave</div>
+    <div id="contactsList"></div>
+    <button class="add" onclick="addContact()" style="margin-top:6px">+ Agregar contacto</button>
+
+    <div class="section-header" style="margin-top:20px">📋 Datos del sitio</div>
+    <div id="siteDataList"></div>
+    <button class="add" onclick="addSiteData()" style="margin-top:6px">+ Agregar dato</button>
+
+    <div class="section-header" style="margin-top:20px">💬 Temas · reunión técnica</div>
+    <p class="muted" style="margin:0 0 8px;font-size:11.5px">Lista numerada para llevar a reuniones. Apretá <b>Enter</b> en un tema para agregar uno nuevo automáticamente.</p>
+    <div id="meetingList"></div>
+    <button class="add" onclick="addMeetingItem()" style="margin-top:6px">+ Agregar tema</button>
+  </div>
+</details>
+
+<!-- Botones al pie -->
+<div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">
+  <button class="ghost" ondblclick="duplicateCurrentProject()" title="Doble-clic para duplicar este proyecto">📋 Duplicar proyecto</button>
+  <button class="ghost" ondblclick="deleteCurrentProjectSafe()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.5);color:#ef4444;font-weight:700" title="Doble-clic + 3 confirmaciones para borrar">🗑 Borrar este proyecto</button>
+</div>
+
+</div><!-- /viewMontaje -->
+
+</main>
+
+<!-- Modal: Backup / Restore -->
+<div id="backupModal" class="modal-bg hidden">
+  <div class="modal-box" style="max-width:600px">
+    <h3>🛡 Backup &amp; Restore</h3>
+    <p style="font-size:11.5px;color:var(--muted);margin:0 0 14px;line-height:1.6">
+      Antes de modificar la estructura del HTML o de Firestore, hacé un backup completo.<br>
+      Los backups se guardan <b>en la nube</b> (colección <code>/backups</code>) <b>y</b> como archivo JSON local.
+    </p>
+
+    <div class="backup-section">
+      <h4>💾 Crear backup ahora</h4>
+      <div class="backup-actions">
+        <button class="btn-warn" onclick="backupAllProjects()">⬇ Backup completo (todos los proyectos)</button>
+        <button class="ghost" onclick="(()=>{ const l=prompt('Nombre del backup (opcional):','pre-cambio-estructura'); if(l!==null) backupAllProjects(l||undefined); })()">✏️ Backup con nombre</button>
+      </div>
+    </div>
+
+    <div class="backup-section">
+      <h4>♻️ Restaurar desde backup JSON</h4>
+      <div class="backup-actions">
+        <button class="ghost" onclick="restoreFromBackup('merge')" title="Importa solo proyectos que NO existan en Firestore (por ID)">📥 Merge (solo agrega nuevos)</button>
+        <button class="btn-crit" ondblclick="restoreFromBackup('overwrite')" title="Doble-clic · Reemplaza TODOS los proyectos existentes con los del backup">⚠ Overwrite (doble-clic)</button>
+      </div>
+      <p style="font-size:10.5px;color:var(--muted);margin:0">El restore aplica migración de schema automáticamente si el backup es de una versión anterior.</p>
+    </div>
+
+    <div class="backup-section">
+      <h4>📋 Historial de backups en la nube (últimos 10)</h4>
+      <div id="backupHistoryList" style="max-height:200px;overflow-y:auto;background:var(--bg-deep);border:1px solid var(--line);border-radius:6px;padding:8px">
+        <p style="color:var(--muted);font-size:11.5px">—</p>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="ghost" onclick="closeBackupModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Crear nuevo proyecto -->
+<div id="newProjectModal" class="modal-bg hidden">
+  <div class="modal-box">
+    <h3>Crear proyecto nuevo</h3>
+    <label>Nombre del proyecto</label>
+    <input type="text" id="newProjName" placeholder="Ej: Stand Arcor en Expo Rural">
+    <label>Base inicial</label>
+    <select id="newProjTemplate">
+      <option value="empty">En blanco (sin tareas, con recursos base)</option>
+      <option value="colapinto">Desde Colapinto (montaje evento, 19 tareas)</option>
+      <option value="permanentes">Obra permanente — PERMANENTES (10 etapas, recursos de obra)</option>
+    </select>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeNewProjectModal()">Cancelar</button>
+      <button onclick="createNewProject()" style="background:var(--accent);color:#111;font-weight:700">Crear y abrir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FIREBASE SDKs (compat v9 — cargados desde CDN)
+════════════════════════════════════════════════════════════ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* ============================================================
+   ██████╗ CONFIGURACIÓN FIREBASE
+   ════════════════════════════════════════════════════════════
+   Pegá acá las credenciales de tu proyecto Firebase.
+   Las encontrás en:
+   Firebase Console → tu proyecto → ⚙️ Configuración → Tus apps → SDK snippet (Config)
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCkFaMIq7bULbsMsEZRYv_-ycfBHkqCKwk",
+  authDomain:        "animal---montaje.firebaseapp.com",
+  projectId:         "animal---montaje",
+  storageBucket:     "animal---montaje.firebasestorage.app",
+  messagingSenderId: "169906236944",
+  appId:             "1:169906236944:web:a3b7840ba5a443b09c6495"
+}
+
+/* ============================================================
+   INIT FIREBASE
+   ============================================================ */
+firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
+
+// Persistencia offline desactivada.
+
+/* ============================================================
+   SCHEMA VERSION
+   ════════════════════════════════════════════════════════════
+   Incrementar este número cada vez que cambiés la estructura
+   de STATE (campos nuevos, renombrados, reorganizados).
+   El sistema migrará automáticamente los documentos viejos.
+   Historial:
+     1 → estructura base (tasks, resources, checklist, risks,
+         contacts, siteData, milestones, meetingItems)
+   ============================================================ */
+const SCHEMA_VERSION = 2;
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+let PROJECTS           = [];
+let CURRENT_PROJECT_ID = null;
+let STATE              = buildEmptyState();
+// UID fijo anónimo para registrar quién editó (sin auth)
+const ANON_UID = "anon_" + (localStorage.getItem("montajeAnonId") || (()=>{ const id=Math.random().toString(36).slice(2,10); localStorage.setItem("montajeAnonId",id); return id; })());
+
+// Listeners de Firestore
+let _projectListener = null;
+let _indexListener   = null;
+
+// Colecciones en Firestore:
+// /projects/{projectId}  → { meta: {...}, state: {...}, schemaVersion: N }
+// /backups/{backupId}    → { createdAt, label, projects: [...] }
+// Reglas Firestore (Firebase Console → Firestore → Reglas):
+//   match /{document=**} {
+//     allow read, write: if true;  // acceso libre por link
+//   }
+
+
+
+
+/* ============================================================
+   MIGRACIÓN DE SCHEMA
+   ════════════════════════════════════════════════════════════
+   Recibe un state con schemaVersion viejo y lo lleva al actual.
+   Agregar un bloque "if(from < N)" por cada versión nueva.
+   ============================================================ */
+function migrateState(state, fromVersion){
+  let s = JSON.parse(JSON.stringify(state));
+  let from = fromVersion || 0;
+
+  // v0 → v1: garantizar todos los arrays y campos base
+  if(from < 1){
+    if(!s.project)       s.project       = {};
+    if(!s.tasks)         s.tasks         = [];
+    if(!s.resources)     s.resources     = [];
+    if(!s.milestones)    s.milestones    = [];
+    if(!s.checklist)     s.checklist     = [];
+    if(!s.risks)         s.risks         = [];
+    if(!s.contacts)      s.contacts      = [];
+    if(!s.siteData)      s.siteData      = [];
+    if(!s.meetingItems)  s.meetingItems  = [];
+    if(!s.project.dayStart)  s.project.dayStart  = "07:00";
+    if(!s.project.dayEnd)    s.project.dayEnd    = "22:00";
+    if(s.project.compressNight === undefined) s.project.compressNight = true;
+    if(!s.project.hourGroup) s.project.hourGroup = 1;
+    if(!s.project.eventName) s.project.eventName = "Hito final";
+    s.tasks = s.tasks.map(t => ({
+      isMilestone: false, critical: false,
+      status: "pendiente", dep: null, res: [], durUnit:"h", subtasks:[], done:false, ...t
+    }));
+    from = 1;
+  }
+  // v1 → v2: agregar subtareas y unidad de duración
+  if(from < 2){
+    s.tasks = s.tasks.map(t => ({
+      durUnit: "h",
+      subtasks: [],
+      done: t.status === "hecho",
+      proveedor: "",
+      ...t,
+      subtasks: (t.subtasks||[]).map(sub=>({
+        id: sub.id||"S1", name:"", start:"", dur:1, durUnit:"h",
+        res:[], dep:null, critical:false, isMilestone:false,
+        status:"pendiente", done:false, proveedor:"", ...sub
+      }))
+    }));
+    from = 2;
+  }
+  // FUTURA MIGRACIÓN: copiar este bloque y cambiar el número
+  // if(from < 2){
+  //   s.tasks = s.tasks.map(t => ({ nuevoCampo: "default", ...t }));
+  //   from = 2;
+  // }
+  return s;
+}
+
+/* ============================================================
+   BACKUP COMPLETO DE FIRESTORE → nube + JSON local
+   ============================================================ */
+async function backupAllProjects(label){
+  const lbl = label || "backup-" + new Date().toISOString().slice(0,19).replace(/[T:]/g,"-");
+  toast("📦 Generando backup...");
+  try{
+    const snapshot = await db.collection("projects").get();
+    const projects = [];
+    snapshot.forEach(doc => projects.push({ id: doc.id, ...doc.data() }));
+    const backupDoc = {
+      createdAt: new Date().toISOString(),
+      label: lbl,
+      schemaVersion: SCHEMA_VERSION,
+      createdBy: ANON_UID,
+      projectsCount: projects.length,
+      projects
+    };
+    await db.collection("backups").add(backupDoc);
+    const blob = new Blob([JSON.stringify(backupDoc, null, 2)], { type:"application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "animal-montaje-" + lbl + ".json"; a.click();
+    URL.revokeObjectURL(url);
+    toast("✅ Backup de " + projects.length + " proyecto(s) guardado");
+    return backupDoc;
+  } catch(err){
+    console.error("Backup error:", err);
+    toast("⚠ Error en backup: " + err.message);
+    throw err;
+  }
+}
+
+/* ============================================================
+   RESTORE DESDE BACKUP JSON
+   ════════════════════════════════════════════════════════════
+   merge   → agrega proyectos que no existan (por ID)
+   overwrite → sobreescribe todo
+   ============================================================ */
+async function restoreFromBackup(mode){
+  mode = mode || "merge";
+  return new Promise((resolve, reject) => {
+    const inp = document.createElement("input"); inp.type="file"; inp.accept=".json";
+    inp.onchange = async e => {
+      const f = e.target.files[0]; if(!f){ resolve(); return; }
+      const r = new FileReader();
+      r.onload = async ev => {
+        try{
+          const backup = JSON.parse(ev.target.result);
+          if(!backup.projects || !Array.isArray(backup.projects))
+            throw new Error("El archivo no parece un backup válido de Animal Montaje.");
+          const projects = backup.projects;
+          const modeLabel = mode==="overwrite" ? "REEMPLAZAR TODO" : "fusionar (merge)";
+          if(!confirm("Vas a " + modeLabel + " con " + projects.length + " proyecto(s) del backup \"" + (backup.label||"sin nombre") + "\" (" + (backup.createdAt||"").slice(0,10) + ").\n\n¿Confirmar?")) return;
+          toast("♻️ Restaurando " + projects.length + " proyecto(s)...");
+          let count = 0;
+          for(const p of projects){
+            const { id, ...data } = p;
+            if(data.state){
+              data.state = migrateState(data.state, data.schemaVersion || 0);
+              data.state = normalizeDates(data.state);
+              data.schemaVersion = SCHEMA_VERSION;
+              if(data.meta) data.meta.updatedAt = new Date().toISOString();
+            }
+            if(mode==="overwrite"){
+              await db.collection("projects").doc(id).set(data);
+            } else {
+              const existing = await db.collection("projects").doc(id).get();
+              if(!existing.exists){ await db.collection("projects").doc(id).set(data); count++; }
+            }
+          }
+          const msg = mode==="overwrite"
+            ? "✅ Restore completo: " + projects.length + " proyectos restaurados"
+            : "✅ Merge: " + count + " proyecto(s) nuevos importados";
+          toast(msg); closeBackupModal(); renderHome(); resolve();
+        } catch(err){ console.error("Restore error:", err); toast("⚠ Error en restore: " + err.message); reject(err); }
+      };
+      r.readAsText(f);
+    };
+    inp.click();
+  });
+}
+
+/* ---- Modal backup: abrir/cerrar/historial ---- */
+function openBackupModal(){
+  document.getElementById("backupModal").classList.remove("hidden");
+  loadBackupHistory();
+}
+function closeBackupModal(){
+  document.getElementById("backupModal").classList.add("hidden");
+}
+async function loadBackupHistory(){
+  const list = document.getElementById("backupHistoryList");
+  list.innerHTML = "<p style=\"color:var(--muted);font-size:11.5px\">Cargando historial...</p>";
+  try{
+    const snap = await db.collection("backups").orderBy("createdAt","desc").limit(10).get();
+    if(snap.empty){ list.innerHTML = "<p style=\"color:var(--muted);font-size:11.5px\">Sin backups en la nube todavía.</p>"; return; }
+    let html = "<table style=\"width:100%;font-size:11.5px;border-collapse:collapse\"><thead><tr>" +
+      "<th style=\"text-align:left;padding:4px 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase\">Fecha</th>" +
+      "<th style=\"text-align:left;padding:4px 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase\">Label</th>" +
+      "<th style=\"text-align:center;padding:4px 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase\">Proyectos</th>" +
+      "<th style=\"text-align:center;padding:4px 6px;color:var(--muted);font-size:10.5px;text-transform:uppercase\">Schema</th>" +
+      "</tr></thead><tbody>";
+    snap.forEach(doc => {
+      const d = doc.data();
+      const fecha = d.createdAt ? new Date(d.createdAt).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}) : "—";
+      html += "<tr style=\"border-top:1px solid var(--line)\">" +
+        "<td style=\"padding:5px 6px;font-family:ui-monospace,monospace;font-size:10.5px\">" + fecha + "</td>" +
+        "<td style=\"padding:5px 6px\">" + esc(d.label||"—") + "</td>" +
+        "<td style=\"padding:5px 6px;text-align:center\"><b>" + (d.projectsCount||0) + "</b></td>" +
+        "<td style=\"padding:5px 6px;text-align:center\">v" + (d.schemaVersion||"?") + "</td>" +
+        "</tr>";
+    });
+    html += "</tbody></table>";
+    list.innerHTML = html;
+  } catch(err){
+    list.innerHTML = "<p style=\"color:var(--crit);font-size:11.5px\">Error al cargar historial: " + err.message + "</p>";
+  }
+}
+
+/* ============================================================
+   SYNC: Índice de proyectos (onSnapshot tiempo real)
+   ============================================================ */
+function attachIndexListener(){
+  if(_indexListener) _indexListener();
+  setSyncDot("syncing");
+  _indexListener = db.collection("projects")
+    .orderBy("meta.updatedAt", "desc")
+    .onSnapshot(snapshot => {
+      PROJECTS = [];
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        if(d && d.meta){
+          PROJECTS.push({
+            id:          doc.id,
+            name:        d.meta.name        || "Sin nombre",
+            location:    d.meta.location    || "",
+            start:       d.meta.start       || "",
+            end:         d.meta.end         || "",
+            tasksCount:  d.meta.tasksCount  || 0,
+            projectType: d.meta.projectType || d.state?.projectType || "montaje",
+            updatedAt:   d.meta.updatedAt   || ""
+          });
+        }
+      });
+      setSyncDot("ok");
+      document.getElementById("fbSpinner").classList.add("hidden");
+      // Si estamos en home, refrescar la grilla
+      if(document.getElementById("viewHome").style.display !== "none"){
+        renderHome();
+      }
+    }, err => {
+      console.error("Index listener error:", err);
+      setSyncDot("error");
+      toast("⚠ Error de sincronización");
+    });
+}
+
+/* ============================================================
+   SYNC: Proyecto abierto (onSnapshot tiempo real)
+   ============================================================ */
+function attachProjectListener(projectId){
+  // Desuscribir listener previo si existe
+  if(_projectListener){ _projectListener(); _projectListener = null; }
+
+  setSyncDot("syncing");
+  _projectListener = db.collection("projects").doc(projectId)
+    .onSnapshot(doc => {
+      if(!doc.exists){
+        toast("El proyecto fue eliminado por otro usuario.");
+        showHome();
+        return;
+      }
+      const data = doc.data();
+      if(!data || !data.state){
+        setSyncDot("error");
+        return;
+      }
+      setSyncDot("ok");
+      // Actualizar STATE con los datos remotos y re-renderizar
+      // Migrar al schema actual si viene de versión vieja
+      const fromVer = doc.data().schemaVersion || 0;
+      STATE = (fromVer < SCHEMA_VERSION) ? migrateState(data.state, fromVer) : data.state;
+      STATE = normalizeDates(STATE);
+      if(fromVer < SCHEMA_VERSION){ save(); } // persistir migración
+      syncInputs();
+      render();
+    }, err => {
+      console.error("Project listener error:", err);
+      setSyncDot("error");
+      toast("⚠ Error de sincronización del proyecto");
+    });
+}
+
+function detachListeners(){
+  if(_indexListener){ _indexListener(); _indexListener = null; }
+  if(_projectListener){ _projectListener(); _projectListener = null; }
+}
+
+/* ============================================================
+   SYNC DOT helper
+   ============================================================ */
+function setSyncDot(status){
+  const dot = document.getElementById("syncDot");
+  if(!dot) return;
+  dot.className = "sync-dot" + (status === "ok" ? "" : " " + status);
+}
+
+/* ============================================================
+   FIREBASE: GUARDAR proyecto (escritura en Firestore)
+   ============================================================ */
+function save(){
+  if(!CURRENT_PROJECT_ID) return;
+  setSyncDot("syncing");
+  const meta = {
+    name:        STATE.project.name      || "Sin nombre",
+    location:    STATE.project.location  || "",
+    start:       STATE.project.start     || "",
+    end:         STATE.project.end       || "",
+    tasksCount:  (STATE.tasks || []).length,
+    projectType: STATE.projectType       || "montaje",
+    updatedAt:   new Date().toISOString(),
+    lastEditBy:  ANON_UID,
+    lastEditByName: "usuario"
+  };
+  db.collection("projects").doc(CURRENT_PROJECT_ID).set({ meta, state: STATE, schemaVersion: SCHEMA_VERSION })
+    .then(() => setSyncDot("ok"))
+    .catch(err => {
+      console.error("Save error:", err);
+      setSyncDot("error");
+      toast("⚠ Error al guardar: " + err.message);
+    });
+}
+
+/* ============================================================
+   CRUD DE PROYECTOS (Firestore)
+   ============================================================ */
+function newProjectId(){
+  return db.collection("projects").doc().id; // ID auto de Firestore
+}
+
+function createProject(name, template){
+  const id = newProjectId();
+  const st = template === "colapinto"    ? buildColapintoState()
+           : template === "permanentes"  ? buildPermanentesState()
+           : buildEmptyState();
+  if(name && name.trim()) st.project.name = name.trim();
+  const meta = {
+    name:       st.project.name,
+    location:   st.project.location || "",
+    start:      st.project.start    || "",
+    end:        st.project.end      || "",
+    tasksCount: (st.tasks || []).length,
+    projectType: st.projectType || "montaje",
+    updatedAt:  new Date().toISOString(),
+    createdBy:  ANON_UID,
+    lastEditBy: ANON_UID,
+    lastEditByName: "usuario"
+  };
+  db.collection("projects").doc(id).set({ meta, state: st })
+    .then(() => openProject(id))
+    .catch(err => { toast("Error al crear proyecto: " + err.message); console.error(err); });
+}
+
+function openProject(id){
+  CURRENT_PROJECT_ID = id;
+  // Buscar en el índice local para tener STATE placeholder mientras carga
+  // Luego el onSnapshot del proyecto lo sobreescribirá
+  STATE = buildEmptyState();
+  showMontaje();
+  attachProjectListener(id);
+}
+
+function duplicateProject(id){
+  // Leer el documento, crear una copia con nuevo id
+  db.collection("projects").doc(id).get().then(doc => {
+    if(!doc.exists){ toast("Proyecto no encontrado"); return; }
+    const data = doc.data();
+    const copy = JSON.parse(JSON.stringify(data.state));
+    copy.project.name = (copy.project.name || "Proyecto") + " (copia)";
+    const newId = newProjectId();
+    const meta = {
+      name:       copy.project.name,
+      location:   copy.project.location || "",
+      start:      copy.project.start    || "",
+      end:        copy.project.end      || "",
+      tasksCount: (copy.tasks || []).length,
+      updatedAt:  new Date().toISOString(),
+      createdBy:  ANON_UID,
+    lastEditBy: ANON_UID,
+    lastEditByName: "usuario"
+    };
+    db.collection("projects").doc(newId).set({ meta, state: copy })
+      .then(() => { toast("Proyecto duplicado"); })
+      .catch(err => toast("Error al duplicar: " + err.message));
+  }).catch(err => toast("Error al leer proyecto: " + err.message));
+}
+
+function deleteProject(id){
+  const p = PROJECTS.find(x => x.id === id);
+  if(!p) return;
+  if(!confirm(`¿Borrar el proyecto "${p.name}"? Esta acción no se puede deshacer.`)) return;
+  if(!confirm("Segunda confirmación: ¿eliminar definitivamente?")) return;
+  db.collection("projects").doc(id).delete()
+    .then(() => { toast("Proyecto eliminado"); renderHome(); })
+    .catch(err => toast("Error al eliminar: " + err.message));
+}
+
+function deleteCurrentProject(){
+  if(!CURRENT_PROJECT_ID) return;
+  deleteProject(CURRENT_PROJECT_ID);
+  if(_projectListener){ _projectListener(); _projectListener = null; }
+  CURRENT_PROJECT_ID = null;
+  showHome();
+}
+
+function deleteCurrentProjectSafe(){
+  if(!CURRENT_PROJECT_ID) return;
+  const p = PROJECTS.find(x => x.id === CURRENT_PROJECT_ID);
+  const name = p ? (p.name || "sin nombre") : "sin nombre";
+  if(!confirm(`⚠ Vas a BORRAR el proyecto "${name}".\n\nEsto elimina todas sus tareas, hitos, recursos, contactos, checklist y riesgos.\n\n¿Seguir?`)) return;
+  if(!confirm(`Segunda confirmación:\n\nSe perderá TODO el trabajo cargado en "${name}". La acción no se puede deshacer.\n\n¿Estás seguro?`)) return;
+  const typed = prompt(`Última verificación — escribí el nombre del proyecto tal cual para confirmar:\n\n"${name}"`);
+  if(typed === null) return;
+  if(typed.trim() !== name){ toast("El nombre no coincide. Cancelado."); return; }
+  db.collection("projects").doc(CURRENT_PROJECT_ID).delete()
+    .then(() => {
+      if(_projectListener){ _projectListener(); _projectListener = null; }
+      CURRENT_PROJECT_ID = null;
+      showHome();
+      toast(`Proyecto "${name}" eliminado`);
+    })
+    .catch(err => toast("Error al eliminar: " + err.message));
+}
+
+function duplicateCurrentProject(){
+  if(!CURRENT_PROJECT_ID) return;
+  const p = PROJECTS.find(x => x.id === CURRENT_PROJECT_ID);
+  if(!p) return;
+  if(!confirm(`¿Duplicar "${p.name}"?\n\nSe creará una copia con todas las tareas, hitos, recursos, etc.`)) return;
+  save(); // flush primero
+  duplicateProject(CURRENT_PROJECT_ID);
+}
+
+function exportProjectJSON(id){
+  db.collection("projects").doc(id).get().then(doc => {
+    if(!doc.exists){ toast("Proyecto no encontrado"); return; }
+    const st = doc.data().state;
+    const data = JSON.stringify({ __type:"animalMontajeProject", version:1, state:st }, null, 2);
+    const blob = new Blob([data], { type:"application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `proyecto-${(st.project.name||"montaje").replace(/\s+/g,"_")}.json`; a.click();
+    URL.revokeObjectURL(url);
+  }).catch(err => toast("Error al exportar: " + err.message));
+}
+
+function exportCurrentProjectJSON(){
+  if(CURRENT_PROJECT_ID) exportProjectJSON(CURRENT_PROJECT_ID);
+}
+
+function importProjectJSON(){
+  const inp = document.createElement("input"); inp.type="file"; inp.accept=".json";
+  inp.onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try{
+        const parsed = JSON.parse(ev.target.result);
+        const st = (parsed && parsed.__type === "animalMontajeProject") ? parsed.state : parsed;
+        if(!st || !st.project) throw new Error("No parece un proyecto de montaje válido");
+        const id   = newProjectId();
+        const meta = {
+          name:       st.project.name     || "Proyecto importado",
+          location:   st.project.location || "",
+          start:      st.project.start    || "",
+          end:        st.project.end      || "",
+          tasksCount: (st.tasks||[]).length,
+          updatedAt:  new Date().toISOString(),
+          createdBy:  ANON_UID,
+          lastEditBy: ANON_UID,
+          lastEditByName: "usuario"
+        };
+        db.collection("projects").doc(id).set({ meta, state: st })
+          .then(() => { toast("Proyecto importado"); })
+          .catch(err => toast("Error al importar: " + err.message));
+      }catch(err){ alert("Error al importar: " + err.message); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+/* ---- Modal: crear proyecto ---- */
+function newProjectModal(){
+  document.getElementById("newProjectModal").classList.remove("hidden");
+  const inp = document.getElementById("newProjName");
+  inp.value = ""; inp.focus();
+}
+function closeNewProjectModal(){
+  document.getElementById("newProjectModal").classList.add("hidden");
+}
+function createNewProject(){
+  const name     = document.getElementById("newProjName").value.trim();
+  const template = document.getElementById("newProjTemplate").value;
+  closeNewProjectModal();
+  createProject(name || "Proyecto nuevo", template);
+}
+
+/* ---- View switching ---- */
+function showHome(){
+  document.getElementById("viewHome").style.display     = "block";
+  document.getElementById("viewMontaje").style.display  = "none";
+  document.getElementById("headerHome").style.display   = "block";
+  document.getElementById("headerMontaje").style.display= "none";
+  document.getElementById("countdown").style.display    = "none";
+  document.getElementById("backToHomeBtn").style.display= "none";
+  document.getElementById("btnSave").style.display      = "none";
+  document.getElementById("btnExpandAll").style.display = "none";
+  document.getElementById("btnCollapseAll").style.display="none";
+  document.getElementById("btnPDF").style.display       = "none";
+  // Desuscribir listener del proyecto
+  if(_projectListener){ _projectListener(); _projectListener = null; }
+  CURRENT_PROJECT_ID = null;
+  renderHome();
+}
+
+function showMontaje(){
+  document.getElementById("viewHome").style.display     = "none";
+  document.getElementById("viewMontaje").style.display  = "block";
+  document.getElementById("headerHome").style.display   = "none";
+  document.getElementById("headerMontaje").style.display= "block";
+  document.getElementById("countdown").style.display    = "block";
+  document.getElementById("backToHomeBtn").style.display= "inline-flex";
+  document.getElementById("btnSave").style.display      = "inline-flex";
+  document.getElementById("btnExpandAll").style.display = "inline-flex";
+  document.getElementById("btnCollapseAll").style.display="inline-flex";
+  document.getElementById("btnPDF").style.display       = "inline-flex";
+  syncInputs();
+  render();
+}
+
+/* ---- Render home ---- */
+function renderHome(){
+  const grid = document.getElementById("projectsGrid");
+  if(!grid) return;
+  if(PROJECTS.length === 0){
+    grid.innerHTML = `<div class="empty-projects">
+      <h2>Todavía no hay proyectos</h2>
+      <p>Creá tu primer proyecto para arrancar. Podés empezar en blanco o desde el preset Colapinto como base.</p>
+      <button class="primary" onclick="newProjectModal()" style="margin-top:12px;background:var(--accent);color:#111;border:0;font-weight:700;padding:10px 18px;font-size:13px">+ Crear primer proyecto</button>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = `<div class="projects-grid">${PROJECTS.map(p => {
+    const start = p.start ? parseD(p.start) : null;
+    const end   = p.end   ? parseD(p.end)   : null;
+    const dateRange = (start && end)
+      ? `${fmtD(start)} → ${fmtD(end)}`
+      : "sin fechas";
+    const updated    = p.updatedAt ? new Date(p.updatedAt) : null;
+    const updatedStr = updated
+      ? updated.toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false})
+      : "—";
+    const isPerm = p.projectType === "permanentes";
+    const cardAccent = isPerm ? "#38bdf8" : "var(--accent)";
+    const cardBadge  = isPerm
+      ? `<span style="display:inline-block;background:#38bdf822;color:#38bdf8;border:1px solid #38bdf866;border-radius:99px;font-size:9.5px;font-weight:800;letter-spacing:.8px;padding:2px 8px;text-transform:uppercase;margin-bottom:6px">🏗 PERMANENTES</span>`
+      : `<span style="display:inline-block;background:var(--accent-soft);color:var(--accent);border:1px solid rgba(255,122,26,.4);border-radius:99px;font-size:9.5px;font-weight:800;letter-spacing:.8px;padding:2px 8px;text-transform:uppercase;margin-bottom:6px">⚡ MONTAJE</span>`;
+    const nameColor = isPerm ? "#38bdf8" : "var(--accent)";
+    return `<div class="project-card" onclick="openProject('${p.id}')" style="border-top:3px solid ${cardAccent}">
+      ${cardBadge}
+      <h3 style="color:${nameColor}">${esc(p.name || "Sin nombre")}</h3>
+      <div class="pc-meta">
+        <b>Predio:</b> ${esc(p.location) || "<span style='color:var(--muted)'>sin definir</span>"}<br>
+        <b>Fechas:</b> ${dateRange}<br>
+        <b>Última edición:</b> <span style="font-family:ui-monospace,monospace">${updatedStr}</span>
+      </div>
+      <div class="pc-stats">
+        <span><b>${p.tasksCount||0}</b> tareas</span>
+      </div>
+      <div class="pc-actions" onclick="event.stopPropagation()">
+        <button title="Duplicar" onclick="duplicateProject('${p.id}')">📋</button>
+        <button title="Exportar JSON" onclick="exportProjectJSON('${p.id}')">⬇</button>
+        <button class="danger" title="Eliminar" onclick="deleteProject('${p.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+/* ── IMPORT/EXPORT LEGACY (JSON directo) ── */
+function exportJSON(){
+  const data = JSON.stringify(STATE, null, 2);
+  const b = new Blob([data],{type:"application/json"});
+  const u = URL.createObjectURL(b);
+  const a = document.createElement("a");
+  a.href=u; a.download=`montaje-${(STATE.project.name||"proyecto").replace(/\s+/g,"_")}.json`; a.click();
+  URL.revokeObjectURL(u);
+}
+function importJSON(){
+  const inp = document.createElement("input"); inp.type="file"; inp.accept=".json";
+  inp.onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try{ STATE = JSON.parse(ev.target.result); save(); syncInputs(); render(); toast("Importado"); }
+      catch(err){ alert("Error: "+err.message); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+function expandAll(){ document.querySelectorAll("#viewMontaje > details").forEach(d=>d.open=true); }
+function collapseAll(){ document.querySelectorAll("#viewMontaje > details").forEach(d=>d.open=false); }
+
+/* ---- SAVE manual + toast ---- */
+function manualSave(){
+  save();
+  const when = new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+  toast(`✓ Guardado a las ${when}`);
+}
+
+/* ============================================================
+   STATE + CONSTANTES
+   ============================================================ */
+const CONTACT_ROLES = ["Predio","Cliente","Flete","Talento","Seguridad","Gráfica","AV","Catering","Otro"];
+const SITE_CATS = [
+  {key:"predio",    label:"🏢 Predio",     color:"#60a5fa"},
+  {key:"electrico", label:"⚡ Eléctrico",  color:"#fbbf24"},
+  {key:"logistica", label:"🚚 Logística",  color:"#22d3ee"},
+  {key:"accesos",   label:"🎫 Accesos",    color:"#a78bfa"},
+  {key:"comercial", label:"💰 Comercial",  color:"#34d399"},
+  {key:"otro",      label:"📋 Otro",       color:"#94a3b8"}
+];
+
+function buildColapintoState(){
+  return {
+    project: {
+      name: "Boxes Colapinto Roadshow",
+      location: "A definir",
+      start: "2026-04-17T08:00",
+      end:   "2026-04-19T14:00",
+      eventName: "Apertura puertas VIP",
+      dayStart: "07:00",
+      dayEnd: "22:00",
+      compressNight: true,
+      hourGroup: 1
+    },
+    resources: [
+      {name:"Jefe Montaje",            color:"#34d399", cap:1},
+      {name:"Cuadrilla Estructura",    color:"#f87171", cap:4},
+      {name:"Cuadrilla Terminaciones", color:"#fb923c", cap:3},
+      {name:"Electricista",            color:"#fbbf24", cap:1},
+      {name:"Técnico AV",              color:"#60a5fa", cap:1},
+      {name:"Ploter / Gráfica",        color:"#a78bfa", cap:2},
+      {name:"PM",                      color:"#c084fc", cap:1},
+      {name:"Cliente",                 color:"#fb7185", cap:0},
+      {name:"Talento",                 color:"#facc15", cap:0}
+    ],
+    tasks: [
+      {id:"M01", name:"Replanteo y marcado de piso",         start:"2026-04-17T08:00", dur:1,   res:[{r:"Jefe Montaje",n:1},{r:"PM",n:1}],                        dep:null,  critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M02", name:"Descarga y acopio",                   start:"2026-04-17T08:30", dur:1.5, res:[{r:"Cuadrilla Estructura",n:3}],                              dep:null,  critical:false, isMilestone:false, status:"pendiente"},
+      {id:"M03", name:"Armado estructura portante",          start:"2026-04-17T09:30", dur:4,   res:[{r:"Cuadrilla Estructura",n:4},{r:"Jefe Montaje",n:1}],      dep:"M01", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M04", name:"Paneles y cerramientos",              start:"2026-04-17T13:30", dur:3,   res:[{r:"Cuadrilla Estructura",n:3}],                              dep:"M03", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M05", name:"Instalación eléctrica (troncal)",     start:"2026-04-17T14:00", dur:3,   res:[{r:"Electricista",n:1},{r:"Cuadrilla Terminaciones",n:1}],   dep:"M03", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M06", name:"Cielorraso / techos",                 start:"2026-04-17T16:30", dur:2,   res:[{r:"Cuadrilla Estructura",n:2}],                              dep:"M04", critical:false, isMilestone:false, status:"pendiente"},
+      {id:"M07", name:"Cierre día 1 + precinto",             start:"2026-04-17T18:30", dur:0.5, res:[{r:"Jefe Montaje",n:1},{r:"PM",n:1}],                         dep:"M06", critical:true,  isMilestone:true,  status:"pendiente"},
+      {id:"M08", name:"Aplicación de gráfica / vinilos",     start:"2026-04-18T08:00", dur:5,   res:[{r:"Ploter / Gráfica",n:2}],                                  dep:"M04", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M09", name:"Instalación AV (pantallas+sonido)",   start:"2026-04-18T09:00", dur:4,   res:[{r:"Técnico AV",n:1},{r:"Electricista",n:1}],                dep:"M05", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M10", name:"Iluminación arquitectural + escénica", start:"2026-04-18T13:00", dur:3,  res:[{r:"Electricista",n:1},{r:"Técnico AV",n:1}],                dep:"M09", critical:false, isMilestone:false, status:"pendiente"},
+      {id:"M11", name:"Mobiliario + ambientación",           start:"2026-04-18T13:00", dur:3,   res:[{r:"Cuadrilla Terminaciones",n:2},{r:"Jefe Montaje",n:1}],    dep:"M08", critical:false, isMilestone:false, status:"pendiente"},
+      {id:"M12", name:"Limpieza profunda",                   start:"2026-04-18T16:00", dur:1.5, res:[{r:"Cuadrilla Terminaciones",n:2}],                           dep:"M11", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M13", name:"Prueba técnica AV + iluminación",     start:"2026-04-18T17:30", dur:1,   res:[{r:"Técnico AV",n:1},{r:"Jefe Montaje",n:1}],                dep:"M10", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M14", name:"Walkthrough cliente",                 start:"2026-04-18T18:30", dur:1,   res:[{r:"PM",n:1},{r:"Jefe Montaje",n:1},{r:"Cliente",n:1}],      dep:"M13", critical:true,  isMilestone:true,  status:"pendiente"},
+      {id:"M15", name:"Ajustes post-walkthrough",            start:"2026-04-18T19:30", dur:1.5, res:[{r:"Cuadrilla Terminaciones",n:2},{r:"Jefe Montaje",n:1}],   dep:"M14", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M16", name:"Apertura predio + ajustes finales",   start:"2026-04-19T08:00", dur:2,   res:[{r:"Jefe Montaje",n:1},{r:"Cuadrilla Terminaciones",n:2}],   dep:"M15", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M17", name:"Prueba técnica final",                start:"2026-04-19T10:00", dur:2,   res:[{r:"Técnico AV",n:1},{r:"Jefe Montaje",n:1}],                dep:"M16", critical:true,  isMilestone:true,  status:"pendiente"},
+      {id:"M18", name:"Briefing staff + protocolos",         start:"2026-04-19T12:00", dur:1,   res:[{r:"PM",n:1}],                                                dep:"M17", critical:true,  isMilestone:false, status:"pendiente"},
+      {id:"M19", name:"Staff en posición · comms",           start:"2026-04-19T13:00", dur:1,   res:[{r:"PM",n:1},{r:"Cuadrilla Terminaciones",n:1}],              dep:"M18", critical:true,  isMilestone:false, status:"pendiente"}
+    ],
+    milestones: [],
+    checklist: [
+      {tminus:54, txt:"Estructura portante en pie",              done:false},
+      {tminus:30, txt:"Eléctrico troncal funcionando",            done:false},
+      {tminus:29, txt:"Gráfica aplicada en frentes principales",  done:false},
+      {tminus:28, txt:"AV instalado y con señal",                 done:false},
+      {tminus:24, txt:"Mobiliario en su lugar",                   done:false},
+      {tminus:20, txt:"Limpieza profunda hecha",                  done:false},
+      {tminus:19, txt:"Walkthrough cliente firmado",              done:false},
+      {tminus:18, txt:"Ajustes post-walkthrough completos",       done:false},
+      {tminus:6,  txt:"Apertura del predio + ajustes",            done:false},
+      {tminus:4,  txt:"Prueba técnica final ok",                  done:false},
+      {tminus:2,  txt:"Briefing staff + protocolos",              done:false},
+      {tminus:1,  txt:"Staff en posición + comms funcionando",    done:false},
+      {tminus:0,  txt:"Apertura puertas VIP",                     done:false}
+    ],
+    risks: [
+      {tipo:"Predio",   titulo:"Predio abre tarde o con condiciones distintas", sol:"Visita técnica 48h antes. Contacto predio verificado. Grupo electrógeno backup."},
+      {tipo:"Gráfica",  titulo:"Gráfica no llega o llega tarde sábado",          sol:"Kit de vinilos cortados de emergencia. Proveedor B con horario confirmado."},
+      {tipo:"AV",       titulo:"Falla pantalla/sonido en prueba técnica",        sol:"Técnico AV on-site con kit repuestos. Pantalla backup más chica."},
+      {tipo:"Equipo",   titulo:"Cuadrilla con bajas (covid/accidente)",          sol:"Tener 1-2 operarios de backup en lista. Jefe B de confianza pre-cotizado."},
+      {tipo:"Clima",    titulo:"Lluvia/viento interrumpe montaje exterior",      sol:"Anclaje según ficha predio. Lona extra + priorizar cubierto primero."},
+      {tipo:"Cliente",  titulo:"Walkthrough con cambios mayores",                sol:"Take list corta. Solo cambios no-estructurales. Los grandes van con OC."},
+      {tipo:"Talento",  titulo:"Colapinto retrasa meet&greet",                   sol:"Ventana con buffer 30 min. Video grabado backup."}
+    ],
+    contacts: [
+      {role:"Predio",    name:"",                 phone:"", note:""},
+      {role:"Cliente",   name:"",                 phone:"", note:""},
+      {role:"Flete",     name:"",                 phone:"", note:""},
+      {role:"Talento",   name:"Colapinto (team)", phone:"", note:"canalizar por manager"},
+      {role:"Gráfica",   name:"",                 phone:"", note:""},
+      {role:"AV",        name:"",                 phone:"", note:""},
+      {role:"Seguridad", name:"",                 phone:"", note:"24/7 predio"}
+    ],
+    siteData: [
+      {category:"predio",    label:"Dirección",               value:""},
+      {category:"predio",    label:"Altura máxima",           value:""},
+      {category:"electrico", label:"kW disponibles",          value:""},
+      {category:"electrico", label:"Tipo de toma / tablero",  value:""},
+      {category:"logistica", label:"Horario ingreso camión",  value:""},
+      {category:"logistica", label:"Ventana desmontaje",      value:""},
+      {category:"accesos",   label:"Lista operarios acreditados", value:""},
+      {category:"accesos",   label:"WiFi del predio",         value:""}
+    ]
+  };
+}
+
+function buildEmptyState(){
+  return {
+    project:{name:"Proyecto nuevo",location:"",start:"2026-04-17T08:00",end:"2026-04-19T14:00",eventName:"Hito final",dayStart:"07:00",dayEnd:"22:00",compressNight:true,hourGroup:1},
+    resources:[
+      {name:"Jefe Montaje",color:"#34d399",cap:1},
+      {name:"Cuadrilla Estructura",color:"#f87171",cap:4},
+      {name:"Cuadrilla Terminaciones",color:"#fb923c",cap:3},
+      {name:"Electricista",color:"#fbbf24",cap:1},
+      {name:"Técnico AV",color:"#60a5fa",cap:1},
+      {name:"Ploter / Gráfica",color:"#a78bfa",cap:2},
+      {name:"PM",color:"#c084fc",cap:1},
+      {name:"Cliente",color:"#fb7185",cap:0},
+      {name:"Talento",color:"#facc15",cap:0}
+    ],
+    tasks:[],milestones:[],checklist:[],risks:[],contacts:[],siteData:[]
+  };
+}
+
+function buildPermanentesState(){
+  return {
+    projectType: "permanentes",
+    project:{
+      name:"Proyecto permanentes",
+      location:"",
+      start:"2026-06-02T08:00",
+      end:"2026-08-31T08:00",
+      eventName:"Apertura",
+      dayStart:"07:00",dayEnd:"19:00",
+      compressNight:true,hourGroup:1
+    },
+    resources:[
+      {name:"Dirección de obra",  color:"#4f86c6",cap:1},
+      {name:"Arquitecto",         color:"#5ba08a",cap:1},
+      {name:"Estructura",         color:"#8b7fc7",cap:4},
+      {name:"Electricidad",       color:"#fbbf24",cap:2},
+      {name:"Plomería",           color:"#22d3ee",cap:2},
+      {name:"Albañilería",        color:"#c47a5a",cap:4},
+      {name:"Carpintería",        color:"#7a9e5f",cap:3},
+      {name:"Pintura",            color:"#b07cbf",cap:2},
+      {name:"Climatización",      color:"#60a5fa",cap:1},
+      {name:"Inspección",         color:"#fb7185",cap:1},
+    ],
+    tasks:[
+      {id:"P01",name:"Demolición y trabajos preliminares",start:"2026-06-02T08:00",dur:7,durUnit:"d",proveedor:"",res:[],dep:null,critical:true,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P02",name:"Estructura",start:"2026-06-09T08:00",dur:14,durUnit:"d",proveedor:"",res:[],dep:"P01",critical:true,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P03",name:"Instalaciones eléctricas",start:"2026-06-23T08:00",dur:10,durUnit:"d",proveedor:"",res:[],dep:"P02",critical:false,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P04",name:"Instalaciones sanitarias",start:"2026-06-23T08:00",dur:10,durUnit:"d",proveedor:"",res:[],dep:"P02",critical:false,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P05",name:"Revestimientos y terminaciones",start:"2026-07-07T08:00",dur:14,durUnit:"d",proveedor:"",res:[],dep:"P03",critical:false,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P06",name:"Carpintería y mobiliario",start:"2026-07-21T08:00",dur:10,durUnit:"d",proveedor:"",res:[],dep:"P05",critical:false,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P07",name:"Pintura",start:"2026-07-21T08:00",dur:7,durUnit:"d",proveedor:"",res:[],dep:"P05",critical:false,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P08",name:"Climatización",start:"2026-07-28T08:00",dur:5,durUnit:"d",proveedor:"",res:[],dep:"P06",critical:false,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P09",name:"Limpieza y entrega",start:"2026-08-25T08:00",dur:3,durUnit:"d",proveedor:"",res:[],dep:null,critical:true,isMilestone:false,status:"pendiente",subtasks:[]},
+      {id:"P10",name:"Apertura",start:"2026-08-31T08:00",dur:1,durUnit:"d",proveedor:"",res:[],dep:"P09",critical:true,isMilestone:true,status:"pendiente",subtasks:[]}
+    ],
+    milestones:[],checklist:[],risks:[],contacts:[],siteData:[]
+  };
+}
+
+function loadPreset(){
+  if(!CURRENT_PROJECT_ID){ toast("Abrí o creá un proyecto primero"); return; }
+  if(STATE.tasks && STATE.tasks.length && !confirm("Reemplazar el contenido actual con el preset Colapinto?")) return;
+  STATE = buildColapintoState();
+  save(); syncInputs(); render();
+  toast("Preset Colapinto cargado en este proyecto");
+}
+
+/* ============================================================
+   UTILS
+   ============================================================ */
+function normalizeDates(state){
+  // Normaliza fechas en memoria — NO guarda automáticamente
+  const fix = (s) => {
+    if(!s || s==="dd/mm/aaaa" || s==="Invalid Date") return ""; // fecha inválida → vacía
+    const d = parseD(s);
+    if(isNaN(d)) return "";
+    return toLocalISO(d);
+  };
+  // Solo normalizamos si el valor es claramente un formato incorrecto
+  // NO tocamos fechas vacías legítimas ni borramos datos
+  const fixSafe = (s) => {
+    if(!s) return s; // dejar vacío como está
+    if(s==="dd/mm/aaaa" || s==="Invalid Date") return ""; // limpiar placeholder
+    const d = parseD(s);
+    if(isNaN(d)) return s; // si no parsea, dejar como está (no borrar)
+    return toLocalISO(d); // convertir a ISO
+  };
+  if(state.project){
+    state.project.start = fixSafe(state.project.start);
+    state.project.end   = fixSafe(state.project.end);
+  }
+  (state.tasks||[]).forEach(t=>{
+    t.start = fixSafe(t.start);
+    if(!t.durUnit) t.durUnit = "d";
+    (t.subtasks||[]).forEach(s=>{
+      s.start = fixSafe(s.start);
+      if(!s.durUnit) s.durUnit = "d";
+      (s.children||[]).forEach(c=>{
+        c.start = fixSafe(c.start);
+        if(!c.durUnit) c.durUnit = "d";
+      });
+    });
+  });
+  return state;
+}
+
+function parseD(s){
+  if(!s) return new Date(NaN);
+  // Ya es ISO: 2026-06-05 o 2026-06-05T08:00
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+  // Formato DD/MM/YYYY o DD/MM/YYYY HH:MM
+  const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[T\s](\d{1,2}:\d{2}))?/);
+  if(m) return new Date(`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}T${m[4]||"00:00"}`);
+  return new Date(s);
+}
+function durToHours(t){
+  const dur = parseFloat(t.dur) || 0;
+  return (t.durUnit==="d") ? dur*24 : dur;
+}
+function taskEnd(t){ return new Date(parseD(t.start).getTime() + durToHours(t)*3600000); }
+function subtaskEnd(s){ return new Date(parseD(s.start).getTime() + durToHours(s)*3600000); }
+function toLocalISO(d){
+  const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,"0"),dd=String(d.getDate()).padStart(2,"0"),hh=String(d.getHours()).padStart(2,"0"),mm=String(d.getMinutes()).padStart(2,"0");
+  return `${y}-${mo}-${dd}T${hh}:${mm}`;
+}
+function fmtD(d){ return d.toLocaleDateString("es-AR",{weekday:"short",day:"2-digit",month:"2-digit"}); }
+function fmtT(d){ return d.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit",hour12:false}); }
+function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+/* Paleta curada para tareas — colores calmados, buen contraste sobre fondo oscuro y claro */
+const TASK_PALETTE = [
+  "#4f86c6", // azul medio
+  "#5ba08a", // verde salvia
+  "#8b7fc7", // violeta suave
+  "#c47a5a", // terracota
+  "#4fa8a8", // teal
+  "#b07cbf", // lavanda
+  "#7a9e5f", // verde oliva
+  "#c4855a", // naranja tostado
+  "#5a8fc4", // celeste
+  "#a07c5a", // marrón cálido
+  "#5aab7a", // verde menta
+  "#9a6faf", // púrpura medio
+];
+
+/* Índice real de la tarea en STATE.tasks (ignorando filtros) para asignar color estable */
+function taskColor(taskId){
+  const idx = (STATE.tasks||[]).findIndex(t=>t.id===taskId);
+  return TASK_PALETTE[Math.abs(idx) % TASK_PALETTE.length];
+}
+
+function resColor(name){ const r = STATE.resources.find(x=>x.name===name); return r? r.color : "#64748b"; }
+function hexAlpha(hex, a){
+  if(!hex || !hex.startsWith || !hex.startsWith("#")) return hex;
+  const h = hex.length===4 ? "#"+hex[1]+hex[1]+hex[2]+hex[2]+hex[3]+hex[3] : hex;
+  const n = parseInt(h.slice(1),16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function toast(m){
+  const t = document.createElement("div"); t.className="toast"; t.textContent = m;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), 1800);
+}
+function telHref(p){ const c = (p||"").replace(/[^+\d]/g,""); return c? "tel:"+c : ""; }
+function waHref(p){ const c = (p||"").replace(/[^\d]/g,"");  return c? "https://wa.me/"+c : ""; }
+
+/* ISO <-> display 24h */
+function isoToDate(iso){ return iso? String(iso).slice(0,10) : ""; }
+function isoToTime(iso){ return iso? String(iso).slice(11,16) : ""; }
+function combineDT(d, t){ if(!d) return ""; return `${d}T${(t||"00:00")}`; }
+function normalizeTime(val){
+  if(val===undefined || val===null || val==="") return "00:00";
+  const m = String(val).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if(!m) return null;
+  const h = parseInt(m[1],10), mi = parseInt(m[2],10);
+  if(h<0 || h>23 || mi<0 || mi>59) return null;
+  return `${String(h).padStart(2,"0")}:${m[2]}`;
+}
+
+/* ============================================================
+   SLOTS VISIBLES — modo día
+   ============================================================ */
+let VISIBLE = [];
+let GANTT_MODE = "day"; // "day" | "hour"  (toggle desde toolbar)
+const GRANU   = 15;     // minutos por slot (solo en modo hora)
+const SLOT_PX_HOUR = 20;
+const SLOT_PX_DAY  = 80; // px por día en modo día
+let SLOT_PX = SLOT_PX_DAY;
+
+function buildVisible(){
+  VISIBLE = [];
+  const projStart = parseD(STATE.project.start);
+  const projEnd   = parseD(STATE.project.end);
+  if(!(projEnd>projStart)) return;
+
+  if(GANTT_MODE === "day"){
+    // un slot = un día natural
+    SLOT_PX = SLOT_PX_DAY;
+    let cur = new Date(projStart);
+    cur.setHours(0,0,0,0);
+    const endDay = new Date(projEnd); endDay.setHours(0,0,0,0);
+    while(cur <= endDay){
+      VISIBLE.push(new Date(cur));
+      cur.setDate(cur.getDate()+1);
+    }
+  } else {
+    SLOT_PX = SLOT_PX_HOUR;
+    const slotMs   = GRANU*60000;
+    const compress = STATE.project.compressNight !== false;
+    const ds = (STATE.project.dayStart||"07:00").split(":").map(Number);
+    const de = (STATE.project.dayEnd||"22:00").split(":").map(Number);
+    const dayStartMin = ds[0]*60 + ds[1];
+    const dayEndMin   = de[0]*60 + de[1];
+    let cur = new Date(projStart);
+    while(cur < projEnd){
+      let visible = true;
+      if(compress){
+        const mins = cur.getHours()*60 + cur.getMinutes();
+        if(mins < dayStartMin || mins >= dayEndMin) visible = false;
+      }
+      if(visible) VISIBLE.push(new Date(cur));
+      cur = new Date(cur.getTime() + slotMs);
+    }
+  }
+}
+
+function timeToVisIdx(date){
+  if(!VISIBLE.length) return -1;
+  const t = date.getTime();
+  if(GANTT_MODE === "day"){
+    const slotMs = 86400000;
+    if(t <= VISIBLE[0].getTime()) return 0;
+    if(t >= VISIBLE[VISIBLE.length-1].getTime() + slotMs) return VISIBLE.length;
+    for(let i=0;i<VISIBLE.length;i++){
+      const s0 = VISIBLE[i].getTime();
+      if(t >= s0 && t < s0+slotMs) return i;
+      if(t < s0) return i;
+    }
+    return VISIBLE.length-1;
+  } else {
+    const slotMs = GRANU*60000;
+    if(t <= VISIBLE[0].getTime()) return 0;
+    if(t >= VISIBLE[VISIBLE.length-1].getTime() + slotMs) return VISIBLE.length;
+    for(let i=0;i<VISIBLE.length;i++){
+      const s0 = VISIBLE[i].getTime();
+      if(t >= s0 && t < s0+slotMs) return i;
+      if(t < s0) return i;
+    }
+    return VISIBLE.length-1;
+  }
+}
+function visIdxToTime(idx){
+  if(GANTT_MODE==="day"){
+    if(idx<=0) return VISIBLE[0];
+    if(idx>=VISIBLE.length) return new Date(VISIBLE[VISIBLE.length-1].getTime()+86400000);
+    return VISIBLE[idx];
+  }
+  if(idx<=0) return VISIBLE[0];
+  if(idx>=VISIBLE.length) return new Date(VISIBLE[VISIBLE.length-1].getTime()+GRANU*60000);
+  return VISIBLE[idx];
+}
+
+/* ============================================================
+   SYNC INPUTS
+   ============================================================ */
+function syncInputs(){
+  document.getElementById("projName").value    = STATE.project.name     || "";
+  document.getElementById("projLoc").value     = STATE.project.location || "";
+  document.getElementById("mStartDate").value  = isoToDate(STATE.project.start);
+  document.getElementById("mStartTime").value  = isoToTime(STATE.project.start);
+  document.getElementById("mEndDate").value    = isoToDate(STATE.project.end);
+  document.getElementById("mEndTime").value    = isoToTime(STATE.project.end);
+  document.getElementById("dayStart").value    = STATE.project.dayStart || "07:00";
+  document.getElementById("dayEnd").value      = STATE.project.dayEnd   || "22:00";
+  document.getElementById("compressNight").checked = STATE.project.compressNight !== false;
+  document.getElementById("hourGroup").value   = String(STATE.project.hourGroup || 1);
+  document.getElementById("subheader").textContent = `— ${STATE.project.name||""} · ${STATE.project.location||""}`;
+  document.getElementById("subheader").style.color = (STATE.projectType === "permanentes") ? "#38bdf8" : "var(--accent)";
+  // Tipo de proyecto
+  const pt = document.getElementById("projType");
+  if(pt) pt.value = STATE.projectType || "montaje";
+  // Colorear el selector según tipo
+  applyProjectTypeStyle();
+}
+
+function setProjectType(val){
+  STATE.projectType = val;
+  applyProjectTypeStyle();
+  save();
+  toast(val === "permanentes" ? "🏗 Proyecto marcado como PERMANENTES" : "⚡ Proyecto marcado como MONTAJE");
+}
+
+function applyProjectTypeStyle(){
+  const pt = document.getElementById("projType");
+  if(!pt) return;
+  const isPerm = (STATE.projectType || "montaje") === "permanentes";
+  pt.style.color       = isPerm ? "#38bdf8" : "var(--accent)";
+  pt.style.borderColor = isPerm ? "#38bdf8" : "var(--accent)";
+  pt.style.background  = isPerm ? "rgba(56,189,248,.1)" : "var(--accent-soft)";
+}
+
+/* ============================================================
+   RENDER PRINCIPAL
+   ============================================================ */
+function render(){
+  renderKPI();
+  renderGantt();
+  renderTasks();
+  renderMilestones();
+  renderResources();
+  renderChecklist();
+  renderRisks();
+  renderContacts();
+  renderSiteData();
+  renderMeeting();
+  renderCountdown();
+  updateActiveChoices();
+  applyLockToAll();
+  // NOTA: save() ya NO se llama en render() — solo se llama explícitamente
+  // cuando el usuario hace un cambio o presiona Guardar.
+}
+
+function updateActiveChoices(){
+  const ds  = STATE.project.dayStart;
+  const de  = STATE.project.dayEnd;
+  const b24 = document.getElementById("btnJornada24");
+  const bDef= document.getElementById("btnJornadaDefault");
+  if(b24)  b24.classList.toggle("active-choice",  ds==="00:00" && de==="23:59");
+  if(bDef) bDef.classList.toggle("active-choice", ds==="07:00" && de==="22:00");
+}
+
+/* ---- KPI ---- */
+function renderKPI(){
+  const start  = parseD(STATE.project.start);
+  const end    = parseD(STATE.project.end);
+  const totalH = (end-start)/3600000;
+  const totalDays = totalH/24;
+  const tareas    = STATE.tasks.length;
+  const criticas  = STATE.tasks.filter(t=>t.critical).length;
+  const hechas    = STATE.tasks.filter(t=>t.status==="hecho").length;
+  const subTotal  = STATE.tasks.reduce((acc,t)=>acc+(t.subtasks||[]).length,0);
+  const subHechas = STATE.tasks.reduce((acc,t)=>acc+(t.subtasks||[]).filter(s=>s.done).length,0);
+  const riesgo    = STATE.tasks.filter(t=>t.status==="riesgo"||t.status==="bloqueado").length;
+  document.getElementById("kpi").innerHTML = `
+    <div class="card"><div class="k">Duración</div><div class="v">${totalDays.toFixed(1)} d · ${totalH.toFixed(0)} h</div></div>
+    <div class="card"><div class="k">Tareas</div><div class="v">${tareas}</div></div>
+    <div class="card"><div class="k">Críticas</div><div class="v warn">${criticas}</div></div>
+    <div class="card"><div class="k">Hechas</div><div class="v ok">${hechas}/${tareas}</div></div>
+    ${subTotal?`<div class="card"><div class="k">Subtareas</div><div class="v ${subHechas===subTotal?"ok":"warn"}">${subHechas}/${subTotal}</div></div>`:""}
+    <div class="card"><div class="k">En riesgo</div><div class="v ${riesgo>0?"crit":""}">${riesgo}</div></div>
+  `;
+}
+
+/* ---- GANTT HELPERS ---- */
+function rowCells(VISIBLE, slotPx, rowH, isDay, ds, de){
+  return VISIBLE.map(d=>{
+    const isWe=d.getDay()===0||d.getDay()===6;
+    const h2=d.getHours(); const isFringe=!isDay&&(h2<ds[0]||h2>=de[0]);
+    return `<div class="gg-cell ${isFringe?"night":""} ${isWe&&isDay?"we":""}" style="width:${slotPx}px;min-height:${rowH}px"></div>`;
+  }).join("");
+}
+
+function buildHeaderHtml(isDay, totalSlots, slotPx, HDR_H, HOUR_H, MILE_H, hourGroup, ds, de, projStart, projEnd, totalW){
+  let html = "";
+  // Header días
+  html += `<div class="gg-hdr-day" style="min-height:${HDR_H}px">`;
+  if(isDay){
+    VISIBLE.forEach(d=>{
+      const dow=d.toLocaleDateString("es-AR",{weekday:"short"}).toUpperCase();
+      const num=d.getDate();
+      const mes=d.toLocaleDateString("es-AR",{month:"short"}).toUpperCase();
+      const isWe=d.getDay()===0||d.getDay()===6;
+      html+=`<div class="gg-day-cell ${isWe?"we":""}" style="width:${slotPx}px;min-height:${HDR_H}px">
+        <span style="font-size:9px;opacity:.7">${dow}</span>
+        <span style="font-size:13px;font-weight:900">${num}</span>
+        <span style="font-size:9px;opacity:.7">${mes}</span>
+      </div>`;
+    });
+  } else {
+    let dayStartIdx=0;
+    for(let i=1;i<=totalSlots;i++){
+      const curD=i<totalSlots?VISIBLE[i]:null, prevD=VISIBLE[i-1];
+      if(!curD||curD.toDateString()!==prevD.toDateString()){
+        const span=i-dayStartIdx;
+        html+=`<div class="gg-day-cell" style="width:${span*slotPx}px;min-height:${HDR_H}px">${fmtD(VISIBLE[dayStartIdx]).toUpperCase()}</div>`;
+        dayStartIdx=i;
+      }
+    }
+  }
+  html+=`</div>`;
+  // Header horas
+  if(!isDay){
+    html+=`<div class="gg-hdr-hour" style="min-height:${HOUR_H}px">`;
+    const groupKey=(d)=>Math.floor(d.getHours()/hourGroup)+"|"+d.toDateString();
+    let hSI=0;
+    for(let i=1;i<=totalSlots;i++){
+      const curD=i<totalSlots?VISIBLE[i]:null, prevD=VISIBLE[i-1];
+      if(!curD||groupKey(curD)!==groupKey(prevD)){
+        const span=i-hSI, firstD=VISIBLE[hSI], firstH=firstD.getHours();
+        const logS=Math.floor(firstH/hourGroup)*hourGroup;
+        const label=hourGroup===1?String(logS).padStart(2,"0")+":00":String(logS).padStart(2,"0")+"–"+String((logS+hourGroup)%24).padStart(2,"0");
+        const alt=Math.floor(logS/hourGroup)%2===0?"even":"odd";
+        html+=`<div class="gg-hour-cell ${alt}" style="width:${span*slotPx}px;min-height:${HOUR_H}px">${label}</div>`;
+        hSI=i;
+      }
+    }
+    html+=`</div>`;
+  }
+  // Hitos
+  html+=`<div class="gg-row gg-mile-row" style="min-height:${MILE_H}px;width:${totalW}px;position:relative">`;
+  VISIBLE.forEach(d=>{
+    const isWe=d.getDay()===0||d.getDay()===6;
+    html+=`<div class="gg-cell ${isWe&&isDay?"we":""}" style="width:${slotPx}px;min-height:${MILE_H}px"></div>`;
+  });
+  const allHitos=[
+    ...STATE.milestones.map(m=>({name:m.name,at:m.at,kind:"mile"})),
+    ...(STATE.tasks||[]).filter(t=>t.isMilestone).map(t=>({name:t.name,at:t.start,kind:"task",id:t.id}))
+  ].sort((a,b)=>parseD(a.at)-parseD(b.at));
+  allHitos.forEach((h,hi)=>{
+    const d=parseD(h.at); if(d<projStart||d>projEnd) return;
+    const idx=timeToVisIdx(d); if(idx<0||idx>totalSlots) return;
+    const label=`H${hi+1}`;
+    const tip=h.kind==="task"?`${label}: ${h.name} (${h.id}) · ${fmtD(d)} ${fmtT(d)}`:`${label}: ${h.name} · ${fmtD(d)} ${fmtT(d)}`;
+    html+=`<div class="milestone" style="left:${idx*slotPx}px" title="${esc(tip)}">${label}</div>`;
+  });
+  html+=`</div>`;
+  return html;
+}
+
+/* ---- GANTT ---- */
+function setGanttMode(mode){
+  GANTT_MODE = mode;
+  document.getElementById("btnGanttDay").classList.toggle("active-choice", mode==="day");
+  document.getElementById("btnGanttHour").classList.toggle("active-choice", mode==="hour");
+  const jornadaControls = document.getElementById("jornadaControls");
+  if(jornadaControls) jornadaControls.style.display = mode==="hour" ? "" : "none";
+  render();
+}
+
+function renderGantt(){
+  const g        = document.getElementById("gantt");
+  const labelsEl = document.getElementById("ganttLabels");
+  const barsEl   = document.getElementById("ganttBars");
+  const gInfo    = document.getElementById("gInfo");
+  const projStart = parseD(STATE.project.start);
+  const projEnd   = parseD(STATE.project.end);
+  if(!(projEnd>projStart)){
+    g.innerHTML=`<p class="muted" style="padding:20px">Definí fechas válidas en la ficha del proyecto.</p>`;
+    if(labelsEl) labelsEl.innerHTML=""; gInfo.textContent=""; return;
+  }
+
+  // Calcular fin real (máximo entre projEnd y fin de todas las tareas)
+  let ganttEnd = new Date(projEnd);
+  (STATE.tasks||[]).forEach(t=>{
+    if(!t.start) return;
+    const ten=taskEnd(t);
+    if(!isNaN(ten.getTime())&&ten>ganttEnd) ganttEnd=new Date(ten.getTime()+86400000);
+    (t.subtasks||[]).forEach(s=>{
+      if(!s.start) return;
+      const sen=subtaskEnd(s);
+      if(!isNaN(sen.getTime())&&sen>ganttEnd) ganttEnd=new Date(sen.getTime()+86400000);
+    });
+  });
+
+  // buildVisible con el rango extendido
+  const savedEnd = STATE.project.end;
+  STATE.project.end = toLocalISO(ganttEnd);
+  buildVisible();
+  STATE.project.end = savedEnd;
+
+  const totalSlots=VISIBLE.length;
+  if(totalSlots===0){ g.innerHTML=`<p class="muted" style="padding:20px">Sin slots visibles.</p>`; if(labelsEl) labelsEl.innerHTML=""; return; }
+
+  const isDay    = GANTT_MODE==="day";
+  const slotPx   = SLOT_PX;
+  const hourGroup= parseInt(STATE.project.hourGroup||1,10);
+  const ds=(STATE.project.dayStart||"07:00").split(":").map(Number);
+  const de=(STATE.project.dayEnd  ||"22:00").split(":").map(Number);
+  const ROW_H=30, SUB_H=26, SUB2_H=22, MILE_H=28, HDR_H=44;
+  const HOUR_H=isDay?0:28;
+  const totalW=totalSlots*slotPx;
+
+  const nDays=((ganttEnd-projStart)/86400000).toFixed(0);
+  gInfo.textContent=`· ${STATE.tasks.length} tareas · ${nDays}d · modo ${isDay?"día":"hora"}`;
+
+  // inProj usa ganttEnd para no excluir tareas fuera del projEnd original
+  const inProj = (st,en) => !isNaN(st.getTime()) && st < ganttEnd && (!isNaN(en.getTime()) ? en > projStart : st >= projStart);
+
+  const cells  = (h) => VISIBLE.map(d=>{
+    const we=d.getDay()===0||d.getDay()===6;
+    const h2=d.getHours(); const fringe=!isDay&&(h2<ds[0]||h2>=de[0]);
+    return `<div class="gg-cell${fringe?" night":""}${we&&isDay?" we":""}" style="width:${slotPx}px;min-height:${h}px"></div>`;
+  }).join("");
+  const barPos = (st,en) => {
+    const si=timeToVisIdx(st);
+    let ei=timeToVisIdx(new Date(en.getTime()-1)); if(ei<si) ei=si;
+    const cs=Math.max(0,si), ce=Math.min(totalSlots-1,ei);
+    const left=cs*slotPx;
+    const w=Math.max(isDay?slotPx-4:10,(ce-cs+1)*slotPx-(isDay?4:2));
+    return {left, width:w};
+  };
+
+  // ── Labels panel ──
+  let L="";
+  L+=`<div class="gl-hdr" style="min-height:${HDR_H+HOUR_H}px;display:flex;align-items:flex-end;padding-bottom:6px;flex-shrink:0">Tarea</div>`;
+  L+=`<div class="gl-hdr gl-hdr-mile" style="min-height:${MILE_H}px;flex-shrink:0">Hitos</div>`;
+  L+=`<div class="gl-body" id="ganttLabelBody">`;
+
+  // ── Bars panel ──
+  let B=buildHeaderHtml(isDay,totalSlots,slotPx,HDR_H,HOUR_H,MILE_H,hourGroup,ds,de,projStart,ganttEnd,totalW);
+
+  (STATE.tasks||[]).forEach(t=>{
+    if(!taskPassesFilter(t)) return;
+    const tst=parseD(t.start), ten=taskEnd(t);
+    const ti=STATE.tasks.indexOf(t);
+    const hasValidDate = !isNaN(tst.getTime()) && t.start;
+    // Mostrar todas las tareas — las sin fecha aparecen como fila vacía
+    if(!hasValidDate){
+      L+=`<div class="gl-row" style="min-height:${ROW_H}px;opacity:.5" title="${esc(t.id+' · '+t.name)}">
+        <span class="gl-sub-arrow empty"></span>
+        <span class="gl-name">${esc(t.name)}</span>
+        <span class="gl-id">${esc(t.id)}</span>
+        <button class="gl-add-sub" onclick="addSubtaskFromGantt(${ti})" title="Agregar subtarea">+</button>
+      </div>`;
+      B+=`<div class="gg-row" style="min-height:${ROW_H}px;width:${totalW}px">${cells(ROW_H)}</div>`;
+      return;
+    }
+    const bg=taskColor(t.id);
+    const subs=(t.subtasks||[]);
+    const subsFilt=subs.filter(s=>s.start&&inProj(parseD(s.start),subtaskEnd(s)));
+    const ganttOpen=t._ganttSubOpen!==false;
+    const sc=subsFilt.length; // subtareas en rango (todas, abiertas o no)
+    const showSubs=ganttOpen&&sc>0;
+
+    // Label: tarea
+    const aCls=sc?(ganttOpen?"gl-sub-arrow open":"gl-sub-arrow"):"gl-sub-arrow empty";
+    const aIcon=sc?(ganttOpen?"▼":"▶"):"";
+    L+=`<div class="gl-row" style="min-height:${ROW_H}px" title="${esc(t.id+' · '+t.name)}">
+      <span class="${aCls}" onclick="${sc?`toggleGanttSub(${ti})`:'void(0)'}">${aIcon}</span>
+      <span class="gl-name">${esc(t.name)}</span>
+      <span class="gl-id">${esc(t.id)}</span>
+      <button class="gl-add-sub" onclick="addSubtaskFromGantt(${ti})" title="Agregar subtarea">+</button>
+    </div>`;
+
+    // Bar: tarea — con handles resize
+    const {left,width}=barPos(tst,ten.getTime()>tst.getTime()?ten:new Date(tst.getTime()+slotPx));
+    const bw=(t.dur===0||!t.dur)?Math.max(slotPx-4,16):width;
+    const cls=["bar",t.critical?"crit":"",t.status==="hecho"?"done":""].filter(Boolean).join(" ");
+    const tip=`${t.id} · ${t.name}\n${fmtD(tst)} → ${fmtD(ten)} (${t.dur||0}${t.durUnit||"d"})`;
+    const lbl=t.proveedor?`${esc(t.name)} <span style="opacity:.7;font-weight:400;font-size:10px">· ${esc(t.proveedor)}</span>`:esc(t.name);
+    B+=`<div class="gg-row" style="min-height:${ROW_H}px;width:${totalW}px">${cells(ROW_H)}`;
+    B+=`<div class="${cls}" data-tid="${esc(t.id)}" style="left:${left}px;width:${bw}px;background:${bg};border:1px solid ${hexAlpha(bg,.4)};color:#fff;font-weight:700" title="${esc(tip)}">`;
+    B+=`<div class="handle handle-l" data-handle="l"></div><span style="overflow:hidden;flex:1">${lbl}</span><div class="handle handle-r" data-handle="r"></div>`;
+    B+=`</div></div>`;
+
+    if(!showSubs) return;
+
+    subsFilt.forEach((s,rawSi)=>{
+      const si=subs.indexOf(s);
+      const sst=parseD(s.start), sen=subtaskEnd(s);
+      const childrenFilt=(s.children||[]).filter(c=>c.start&&inProj(parseD(c.start),subtaskEnd(c)));
+      const childOpen=s._ganttChildOpen!==false&&childrenFilt.length>0;
+      const hasCh=childrenFilt.length>0;
+
+      // Label: sub
+      const saCls=hasCh?(childOpen?"gl-sub-arrow open":"gl-sub-arrow"):"gl-sub-arrow empty";
+      const saIcon=hasCh?(childOpen?"▼":"▶"):"";
+      L+=`<div class="gl-row gl-sub" style="min-height:${SUB_H}px">
+        <span class="${saCls}" style="font-size:9px" onclick="${hasCh?`toggleGanttL3(${ti},${si})`:'void(0)'}">${saIcon}</span>
+        <span style="color:var(--accent);margin-right:4px;flex-shrink:0;font-size:10px">↳</span>
+        <span class="gl-name">${esc(s.name||"—")}</span>
+        <span class="gl-id">${esc(s.id||"S"+(si+1))}</span>
+      </div>`;
+
+      // Bar: sub — con handles
+      const sp=barPos(sst,sen);
+      const sBg=hexAlpha(bg,.22);
+      const sCls=["bar","sub-gantt-bar",s.done?"done":"",s.critical?"crit":""].filter(Boolean).join(" ");
+      const sTip=`↳ ${s.name}\n${fmtD(sst)} → ${fmtD(sen)}`;
+      B+=`<div class="gg-row gg-sub" style="min-height:${SUB_H}px;width:${totalW}px">${cells(SUB_H)}`;
+      B+=`<div class="${sCls}" data-tid="${esc(t.id)}" data-sid="${si}" style="left:${sp.left}px;width:${sp.width}px;background:${sBg};border:1px solid ${bg};color:var(--ink)" title="${esc(sTip)}">`;
+      B+=`<div class="handle handle-l" data-handle="l"></div>`;
+      B+=`<span style="padding:0 10px;overflow:hidden;flex:1">${esc(s.name||"—")}${s.proveedor?` <span style="opacity:.6;font-size:9.5px">· ${esc(s.proveedor)}</span>`:""}</span>`;
+      B+=`<div class="handle handle-r" data-handle="r"></div>`;
+      B+=`</div></div>`;
+
+      if(!childOpen) return;
+
+      childrenFilt.forEach((c,rawCi)=>{
+        const ci=(s.children||[]).indexOf(c);
+        const cst=parseD(c.start), cen=subtaskEnd(c);
+
+        // Label: sub-sub
+        L+=`<div class="gl-row gl-sub gl-sub2" style="min-height:${SUB2_H}px">
+          <span class="gl-sub-arrow empty" style="font-size:9px"></span>
+          <span style="color:var(--muted);margin-right:4px;flex-shrink:0;font-size:9px">↳↳</span>
+          <span class="gl-name" style="font-size:10px">${esc(c.name||"—")}</span>
+          <span class="gl-id" style="font-size:9px">${esc(c.id||"C"+(ci+1))}</span>
+        </div>`;
+
+        // Bar: sub-sub (sin handles — solo visual)
+        const cp=barPos(cst,cen);
+        const cBg=hexAlpha(bg,.12);
+        const cCls=["bar","sub2-gantt-bar",c.done?"done":""].filter(Boolean).join(" ");
+        const cTip=`↳↳ ${c.name}\n${fmtD(cst)} → ${fmtD(cen)}`;
+        B+=`<div class="gg-row gg-sub2" style="min-height:${SUB2_H}px;width:${totalW}px">${cells(SUB2_H)}`;
+        B+=`<div class="${cCls}" data-tid="${esc(t.id)}" data-sid="${si}" data-cid="${ci}" style="left:${cp.left}px;width:${cp.width}px;background:${cBg};border:1px dotted ${bg};color:var(--ink)" title="${esc(cTip)}">`;
+        B+=`<span style="padding:0 8px;overflow:hidden;flex:1;font-size:9.5px">${esc(c.name||"—")}${c.proveedor?` <span style="opacity:.5;font-size:9px">· ${esc(c.proveedor)}</span>`:""}</span>`;
+        B+=`</div></div>`;
+      });
+    });
+  });
+
+  L+=`</div>`;
+  if(labelsEl) labelsEl.innerHTML=L;
+  g.innerHTML=B;
+  renderGanttFilter();
+  const lb=document.getElementById("ganttLabelBody");
+  if(barsEl&&lb) barsEl.onscroll=()=>{ lb.scrollTop=barsEl.scrollTop; };
+}
+/* ---- Filtro de recursos ---- */
+function isResHidden(name){
+  const arr = STATE.project.hiddenResources || [];
+  return arr.indexOf(name) !== -1;
+}
+function toggleResFilter(name){
+  if(!STATE.project.hiddenResources) STATE.project.hiddenResources = [];
+  const i = STATE.project.hiddenResources.indexOf(name);
+  if(i >= 0) STATE.project.hiddenResources.splice(i,1);
+  else STATE.project.hiddenResources.push(name);
+  save(); render();
+}
+function showAllResFilter(){ STATE.project.hiddenResources = []; save(); render(); }
+function hideAllResFilter(){ STATE.project.hiddenResources = STATE.resources.map(r=>r.name); save(); render(); }
+function taskPassesFilter(t){
+  const hidden = STATE.project.hiddenResources || [];
+  if(!hidden.length) return true;
+  if(!t.res || !t.res.length) return true;
+  return t.res.some(r => hidden.indexOf(r.r) === -1);
+}
+function renderGanttFilter(){
+  const box = document.getElementById("ganttFilter"); if(!box) return;
+  const usedNames = [...new Set((STATE.tasks||[]).flatMap(t => t.res.map(r => r.r)))];
+  const resList   = STATE.resources.filter(r => usedNames.includes(r.name));
+  if(resList.length === 0){ box.innerHTML = `<span class="flabel muted">Sin recursos en uso</span>`; return; }
+  const hiddenCount = (STATE.project.hiddenResources||[]).filter(n=>usedNames.includes(n)).length;
+  let html = `<span class="flabel">Filtrar:</span>`;
+  html += resList.map(r=>{
+    const hidden = isResHidden(r.name);
+    const style  = hidden ? "" : `background:${hexAlpha(r.color,.25)};color:${r.color};border-color:${r.color}`;
+    return `<span class="fchip ${hidden?'off':''}" style="${style}" onclick="toggleResFilter('${esc(r.name)}')" title="${hidden?'Click para mostrar':'Click para ocultar'}"><span class="dot"></span>${esc(r.name)}</span>`;
+  }).join("");
+  if(hiddenCount > 0) html += `<button class="fbtn" onclick="showAllResFilter()">Mostrar todos</button>`;
+  else                html += `<button class="fbtn" onclick="hideAllResFilter()">Ocultar todos</button>`;
+  box.innerHTML = html;
+}
+
+/* ---- TASKS TABLE ---- */
+function renderTasks(){
+  document.getElementById("tCount").textContent = `${(STATE.tasks||[]).length} tareas`;
+  const t = document.getElementById("tasksTable");
+  t.innerHTML = `<thead><tr>
+    <th style="width:28px" title="Subtareas"></th>
+    <th style="width:28px" title="Arrastrar para reordenar"></th>
+    <th>ID</th><th>Tarea</th><th>Inicio</th><th>Dur</th><th>Fin</th><th>Proveedor</th><th>Recursos</th><th>Dep</th><th>Crít</th><th>◆ Hito</th><th>Estado</th><th></th>
+  </tr></thead><tbody>${(STATE.tasks||[]).map((t,i)=>taskRow(t,i)).join("")}</tbody>`;
+}
+function taskRow(t, i){
+  const depOpts    = `<option value="">—</option>`+(STATE.tasks||[]).filter(x=>x.id!==t.id).map(x=>`<option value="${esc(x.id)}" ${t.dep===x.id?"selected":""}>${esc(x.id)}</option>`).join("");
+  const statusOpts = ["pendiente","en_curso","hecho","riesgo","bloqueado"].map(s=>`<option value="${s}" ${t.status===s?"selected":""}>${s.replace("_"," ")}</option>`).join("");
+  const durUnit    = t.durUnit || "h";
+  const enD        = taskEnd(t);
+  const endStr     = fmtD(enD);
+  const subCount   = (t.subtasks||[]).length;
+  const subDoneCount = (t.subtasks||[]).filter(s=>s.done).length;
+  const subLabel   = subCount ? `${subDoneCount}/${subCount}` : "+";
+  const arrowClass = subCount
+    ? (t._subOpen ? "has-sub is-open" : "has-sub")
+    : "no-sub";
+  const arrowIcon  = subCount ? (t._subOpen ? "▼" : "▶") : "▶";
+  const arrowTitle = subCount
+    ? (t._subOpen ? `Cerrar subtareas (${subCount})` : `Ver ${subCount} subtarea${subCount>1?"s":""}`)
+    : "Sin subtareas";
+  return `<tr data-idx="${i}"
+      ondragover="onTaskDragOver(event)"
+      ondragleave="onTaskDragLeave(event)"
+      ondrop="onTaskDrop(event,${i})">
+    <td style="text-align:center;padding:0 2px">
+      <span class="sub-arrow ${arrowClass}" onclick="${subCount?`toggleSubPanel(${i})`:`addSubtaskFromGantt(${i})`}" title="${arrowTitle}">${arrowIcon}</span>
+    </td>
+    <td class="drag-handle" title="Arrastrar para reordenar"
+        draggable="true"
+        ondragstart="onHandleDragStart(event,${i})"
+        ondragend="onHandleDragEnd(event)">⠿</td>
+    <td><input type="text" style="width:62px" value="${esc(t.id)}" onchange="setTask(${i},'id',this.value)"></td>
+    <td><input type="text" value="${esc(t.name)}" onchange="setTask(${i},'name',this.value)"></td>
+    <td style="white-space:nowrap">
+      <input type="date" lang="en-GB" value="${isoToDate(t.start)}" onchange="setTaskDT(${i},'date',this.value)" style="width:130px">
+    </td>
+    <td style="white-space:nowrap">
+      <input type="number" value="${durUnit==="d"?Math.round(t.dur):t.dur}" min="${durUnit==="d"?1:0.25}" step="${durUnit==="d"?1:0.25}" style="width:58px" onchange="setTask(${i},'dur',durUnit==="d"?Math.round(parseFloat(this.value)):parseFloat(this.value))">
+      <select class="dur-unit-select" onchange="setTask(${i},'durUnit',this.value)" title="Unidad de duración">
+        <option value="h" ${durUnit==="h"?"selected":""}>h</option>
+        <option value="d" ${durUnit==="d"?"selected":""}>d</option>
+      </select>
+    </td>
+    <td class="task-end-col" title="Fin calculado"><b>${endStr}</b></td>
+    <td><input type="text" value="${esc(t.proveedor||'')}" placeholder="Proveedor…" onchange="setTask(${i},'proveedor',this.value)" style="width:130px"></td>
+    <td><div class="task-res-editor">${renderTaskRes(t,i)}</div></td>
+    <td><select onchange="setTask(${i},'dep',this.value||null)">${depOpts}</select></td>
+    <td style="text-align:center"><button class="crit-btn ${t.critical?'active':''}" ondblclick="toggleTaskCritical('${esc(t.id)}')" title="Doble-clic para marcar/desmarcar como crítica">!</button></td>
+    <td style="text-align:center"><button class="hito-btn ${t.isMilestone?'active':''}" ondblclick="toggleTaskMilestone('${esc(t.id)}')" title="Doble-clic para marcar/desmarcar como hito">H</button></td>
+    <td><select onchange="setTask(${i},'status',this.value)">${statusOpts}</select></td>
+    <td><button class="del" ondblclick="delTask(${i})" title="Doble-clic para eliminar">✕</button></td>
+  </tr>
+  <tr class="sub-panel-row" id="subpanel-${i}" style="${t._subOpen?'':'display:none'}">
+    <td colspan="14" style="padding:0">${renderSubPanel(t,i)}</td>
+  </tr>`;
+}
+/* ---- SUBTAREAS ---- */
+function renderSubResEditor(ti, si){
+  const s = STATE.tasks[ti].subtasks[si];
+  if(!s.res) s.res = [];
+  const chips = s.res.map((r,ri)=>
+    `<span class="chip" style="background:${resColor(r.r)}"><span>${esc(r.r.split(" ")[0])}</span>×<input type="number" min="1" value="${r.n}" onchange="setSubRes(${ti},${si},${ri},'n',parseInt(this.value))"><button onclick="delSubRes(${ti},${si},${ri})">×</button></span>`
+  ).join("");
+  const opts = STATE.resources.map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join("");
+  return `${chips}<select onchange="addSubRes(${ti},${si},this.value);this.selectedIndex=0"><option value="">+ recurso</option>${opts}</select>`;
+}
+
+function addSubRes(ti,si,rname){
+  if(!rname) return;
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks[si]) return;
+  if(!t.subtasks[si].res) t.subtasks[si].res=[];
+  if(t.subtasks[si].res.find(r=>r.r===rname)) return;
+  t.subtasks[si].res.push({r:rname,n:1}); save(); refreshSubPanel(ti);
+}
+function delSubRes(ti,si,ri){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks[si]) return;
+  t.subtasks[si].res.splice(ri,1); save(); refreshSubPanel(ti);
+}
+function setSubRes(ti,si,ri,key,val){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks[si]) return;
+  t.subtasks[si].res[ri][key]=val; save();
+}
+function toggleSubCritical(ti,si){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks[si]) return;
+  t.subtasks[si].critical=!t.subtasks[si].critical; save(); refreshSubPanel(ti);
+  toast(t.subtasks[si].critical?"Subtarea crítica":"Subtarea normal");
+}
+function toggleSubMilestone(ti,si){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks[si]) return;
+  t.subtasks[si].isMilestone=!t.subtasks[si].isMilestone; save(); refreshSubPanel(ti);
+}
+function refreshSubPanel(ti){
+  const t=STATE.tasks[ti]; if(!t) return;
+  const row=document.getElementById("subpanel-"+ti);
+  if(row){
+    if(t.subtasks.length===0 || !t._subOpen){
+      row.style.display="none";
+    } else {
+      row.style.display="";
+      row.querySelector("td").innerHTML=renderSubPanel(t,ti);
+    }
+  }
+  refreshSubBtn(ti);
+}
+function refreshSubBtn(ti){
+  const t=STATE.tasks[ti]; if(!t) return;
+  const arrow = document.querySelector(`tr[data-idx="${ti}"] .sub-arrow`);
+  if(!arrow) return;
+  const sc = (t.subtasks||[]).length;
+  arrow.className = "sub-arrow " + (sc ? (t._subOpen ? "has-sub is-open" : "has-sub") : "no-sub");
+  arrow.textContent = sc ? (t._subOpen ? "▼" : "▶") : "▶";
+  arrow.title = sc
+    ? (t._subOpen ? `Cerrar subtareas (${sc})` : `Ver ${sc} subtarea${sc>1?"s":""}`)
+    : "Sin subtareas";
+  arrow.onclick = sc ? ()=>toggleSubPanel(ti) : ()=>addSubtaskFromGantt(ti);
+}
+
+function renderSubPanel(t, ti){
+  const subs = t.subtasks || [];
+  const parentStart = t.start || STATE.project.start || "";
+
+  function subRows(s, si){
+    const du = s.durUnit||"h";
+    const en = subtaskEnd(s);
+    const endStr = fmtD(en);
+    const doneStyle = s.done ? "opacity:.5" : "";
+    const depOpts = `<option value="">—</option>`+subs.filter((_,idx)=>idx!==si).map(x=>`<option value="${esc(x.id)}" ${s.dep===x.id?"selected":""}>${esc(x.id)}</option>`).join("");
+    const statusOpts = ["pendiente","en_curso","hecho","riesgo","bloqueado"].map(st=>`<option value="${st}" ${s.status===st?"selected":""}>${st.replace("_"," ")}</option>`).join("");
+    if(!s.res) s.res=[];
+    const children = s.children||[];
+    const childOpen = s._childOpen;
+    const hasChildren = children.length>0;
+    const arrowCls = hasChildren?(childOpen?"sub-arrow has-sub is-open":"sub-arrow has-sub"):"sub-arrow no-sub";
+    const arrowIcon = hasChildren?(childOpen?"▼":"▶"):"▶";
+
+    let html = `<tr data-subidx="${si}"
+      ondragover="onSubDragOver(event,${ti})"
+      ondragleave="onSubDragLeave(event)"
+      ondrop="onSubDrop(event,${ti},${si})"
+      style="${doneStyle}">
+      <td style="width:28px;text-align:center">
+        <span class="${arrowCls}" style="font-size:10px" onclick="toggleL3Panel(${ti},${si})" title="${hasChildren?(childOpen?'Ocultar':'Mostrar '+children.length+' sub-subtarea'+(children.length>1?'s':'')):'Sin sub-subtareas (click para agregar)'}">${arrowIcon}</span>
+      </td>
+      <td class="drag-handle" style="font-size:14px;width:22px"
+          draggable="true"
+          ondragstart="onSubDragStart(event,${ti},${si})"
+          ondragend="onSubDragEnd(event)"
+          title="Arrastrar para reordenar">⠿</td>
+      <td><input type="text" style="width:62px" value="${esc(s.id||'S'+(si+1))}" onchange="setSubtask(${ti},${si},'id',this.value)"></td>
+      <td><input type="text" value="${esc(s.name)}" placeholder="Nombre subtarea…" onchange="setSubtask(${ti},${si},'name',this.value)" ${s.done?'style="text-decoration:line-through"':''}></td>
+      <td><input type="date" lang="en-GB" value="${isoToDate(s.start)||isoToDate(parentStart)}" onchange="setSubtaskDT(${ti},${si},'date',this.value)" style="width:130px"></td>
+      <td style="white-space:nowrap">
+        <input type="number" value="${du==="d"?Math.round(s.dur||1):s.dur||1}" min="${du==="d"?1:0.25}" step="${du==="d"?1:0.25}" style="width:58px" onchange="setSubtask(${ti},${si},'dur',du==="d"?Math.round(parseFloat(this.value)):parseFloat(this.value))">
+        <select class="dur-unit-select" onchange="setSubtask(${ti},${si},'durUnit',this.value)">
+          <option value="h" ${du==="h"?"selected":""}>h</option>
+          <option value="d" ${du==="d"?"selected":""}>d</option>
+        </select>
+      </td>
+      <td class="task-end-col"><b style="color:var(--ok)">${endStr}</b></td>
+      <td><input type="text" value="${esc(s.proveedor||'')}" placeholder="Proveedor…" onchange="setSubtask(${ti},${si},'proveedor',this.value)" style="width:120px"></td>
+      <td><div class="task-res-editor" id="subres-${ti}-${si}">${renderSubResEditor(ti,si)}</div></td>
+      <td><select onchange="setSubtask(${ti},${si},'dep',this.value||null)">${depOpts}</select></td>
+      <td style="text-align:center"><button class="crit-btn ${s.critical?'active':''}" ondblclick="toggleSubCritical(${ti},${si})">!</button></td>
+      <td style="text-align:center"><button class="hito-btn ${s.isMilestone?'active':''}" ondblclick="toggleSubMilestone(${ti},${si})">H</button></td>
+      <td><select onchange="setSubtask(${ti},${si},'status',this.value)">${statusOpts}</select></td>
+      <td style="text-align:center"><input type="checkbox" class="subtask-done-check" ${s.done?"checked":""} onchange="setSubtask(${ti},${si},'done',this.checked)"></td>
+      <td><button class="del" ondblclick="delSubtask(${ti},${si})">✕</button></td>
+    </tr>`;
+
+    // Panel nivel 3 — siempre en el DOM, show/hide
+    const l3rows = children.map((c,ci)=>{
+      const cdu=c.durUnit||"h";
+      const cen=subtaskEnd(c);
+      const cEndStr=fmtD(cen);
+      const cDone=c.done?"opacity:.5":"";
+      const cStatusOpts=["pendiente","en_curso","hecho","riesgo","bloqueado"].map(st=>`<option value="${st}" ${c.status===st?"selected":""}>${st.replace("_"," ")}</option>`).join("");
+      return `<tr class="lvl3-row" style="${cDone}">
+        <td style="width:28px;text-align:center;color:var(--muted);font-size:10px">↳↳</td>
+        <td><input type="text" style="width:62px;font-size:11px" value="${esc(c.id||'C'+(ci+1))}" onchange="setL3(${ti},${si},${ci},'id',this.value)"></td>
+        <td><input type="text" style="font-size:11px" value="${esc(c.name||'')}" placeholder="Sub-subtarea…" onchange="setL3(${ti},${si},${ci},'name',this.value)" ${c.done?'style="text-decoration:line-through;font-size:11px"':''}></td>
+        <td><input type="date" lang="en-GB" value="${isoToDate(c.start)||isoToDate(s.start)||isoToDate(parentStart)}" onchange="setL3DT(${ti},${si},${ci},this.value)" style="width:130px;font-size:11px"></td>
+        <td style="white-space:nowrap">
+          <input type="number" value="${cdu==="d"?Math.round(c.dur||1):c.dur||1}" min="${cdu==="d"?1:0.25}" step="${cdu==="d"?1:0.25}" style="width:58px;font-size:11px" onchange="setL3(${ti},${si},${ci},'dur',cdu==="d"?Math.round(parseFloat(this.value)):parseFloat(this.value))">
+          <select class="dur-unit-select" onchange="setL3(${ti},${si},${ci},'durUnit',this.value)">
+            <option value="h" ${cdu==="h"?"selected":""}>h</option>
+            <option value="d" ${cdu==="d"?"selected":""}>d</option>
+          </select>
+        </td>
+        <td class="task-end-col"><b style="color:var(--ok);font-size:10.5px">${cEndStr}</b></td>
+        <td><input type="text" value="${esc(c.proveedor||'')}" placeholder="Proveedor…" onchange="setL3(${ti},${si},${ci},'proveedor',this.value)" style="width:120px;font-size:11px"></td>
+        <td colspan="4" style="color:var(--muted);font-size:10px;padding-left:8px">—</td>
+        <td><select style="font-size:11px" onchange="setL3(${ti},${si},${ci},'status',this.value)">${cStatusOpts}</select></td>
+        <td style="text-align:center"><input type="checkbox" class="subtask-done-check" ${c.done?"checked":""} onchange="setL3(${ti},${si},${ci},'done',this.checked)"></td>
+        <td><button class="del" ondblclick="delL3(${ti},${si},${ci})">✕</button></td>
+      </tr>`;
+    }).join("");
+
+    const addBtn = `<tr class="lvl3-row" style="background:none">
+      <td colspan="14" style="padding:4px 8px 6px 48px">
+        <button class="add" style="font-size:11px" onclick="addL3(${ti},${si})">+ Sub-subtarea</button>
+      </td>
+    </tr>`;
+
+    html += `<tr class="lvl3-container" id="l3panel-${ti}-${si}" style="${childOpen && hasChildren?'':'display:none'}">
+      <td colspan="14" style="padding:0">
+        <table class="subtask-table" style="background:rgba(0,0,0,.12)">
+          <thead><tr style="background:rgba(0,0,0,.2)">
+            <th style="width:28px;padding-left:12px"></th>
+            <th style="width:70px">ID</th><th>Sub-subtarea</th><th>Inicio</th><th>Dur</th><th>Fin</th>
+            <th style="width:130px">Proveedor</th><th colspan="4" style="width:160px">—</th>
+            <th style="width:110px">Estado</th><th style="width:46px;text-align:center">Hecha</th><th style="width:36px"></th>
+          </tr></thead>
+          <tbody>${l3rows}${addBtn}</tbody>
+        </table>
+      </td>
+    </tr>`;
+    return html;
+  }
+
+  const rows = subs.map((s,si)=>subRows(s,si)).join("");
+
+  return `<div class="subtask-panel">
+    <div class="sub-hdr">
+      ↳ Subtareas de <span style="color:var(--ink);font-weight:700">${esc(t.name)}</span>
+      <button class="add" onclick="addSubtask(${ti})" style="margin-left:auto">+ Agregar subtarea</button>
+    </div>
+    ${subs.length === 0
+      ? `<p style="color:var(--muted);font-size:11.5px;margin:0;padding:10px 16px 10px 48px">Sin subtareas. Hacé clic en "+ Agregar subtarea".</p>`
+      : `<table class="subtask-table">
+          <thead><tr>
+            <th style="width:28px"></th>
+            <th style="width:22px"></th>
+            <th style="width:70px">ID</th>
+            <th>Subtarea</th>
+            <th>Inicio</th>
+            <th>Dur</th>
+            <th>Fin</th>
+            <th style="width:130px">Proveedor</th>
+            <th>Recursos</th>
+            <th style="width:70px">Dep</th>
+            <th style="width:42px;text-align:center">Crít</th>
+            <th style="width:42px;text-align:center">◆ Hito</th>
+            <th style="width:110px">Estado</th>
+            <th style="width:46px;text-align:center">Hecha</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`
+    }
+  </div>`;
+}
+
+/* ---- NIVEL 3: sub-subtareas (children) ---- */
+function getL3(ti,si,ci){ return STATE.tasks[ti]?.subtasks[si]?.children[ci]; }
+
+function addL3(ti,si){
+  const s=STATE.tasks[ti]?.subtasks[si]; if(!s) return;
+  if(!s.children) s.children=[];
+  s.children.push({id:"C"+(s.children.length+1),name:"",start:s.start||"",dur:1,durUnit:"d",proveedor:"",status:"pendiente",done:false});
+  s._childOpen=true; save(); refreshSubPanel(ti);
+}
+function setL3(ti,si,ci,key,val){
+  const c=getL3(ti,si,ci); if(!c) return;
+  c[key]=val; save();
+  if(["done","status"].includes(key)) refreshSubPanel(ti);
+  else if(["dur","durUnit"].includes(key)){
+    // actualizar solo celda fin
+    const en=subtaskEnd(c); const endStr=fmtD(en);
+    const panel=document.getElementById(`l3panel-${ti}-${si}`);
+    if(panel){ const trs=panel.querySelectorAll("tbody tr"); if(trs[ci]){ const ec=trs[ci].querySelector(".task-end-col b"); if(ec) ec.textContent=endStr; } }
+  }
+}
+function setL3DT(ti,si,ci,dateVal){
+  const c=getL3(ti,si,ci); if(!c) return;
+  const curTime=isoToTime(c.start)||isoToTime(STATE.tasks[ti]?.subtasks[si]?.start)||"08:00";
+  c.start=combineDT(dateVal,curTime); save();
+  const en=subtaskEnd(c); const endStr=fmtD(en);
+  const panel=document.getElementById(`l3panel-${ti}-${si}`);
+  if(panel){ const trs=panel.querySelectorAll("tbody tr"); if(trs[ci]){ const ec=trs[ci].querySelector(".task-end-col b"); if(ec) ec.textContent=endStr; } }
+}
+function toggleL3Panel(ti,si){
+  const s=STATE.tasks[ti]?.subtasks[si]; if(!s) return;
+  if(!s.children||s.children.length===0){
+    // Sin children — agregar la primera directamente
+    addL3(ti,si); return;
+  }
+  s._childOpen=!s._childOpen;
+  save(); refreshSubPanel(ti);
+}
+
+function delL3(ti,si,ci){
+  const s=STATE.tasks[ti]?.subtasks[si]; if(!s||!s.children) return;
+  const name=s.children[ci]?.name||"esta sub-subtarea";
+  if(!confirm(`¿Borrar "${name}"?`)) return;
+  s.children.splice(ci,1);
+  // Si quedan 0, cerrar el panel
+  if(s.children.length===0) s._childOpen=false;
+  save(); refreshSubPanel(ti); renderGantt();
+}
+
+function toggleSubPanel(ti){
+  const t = STATE.tasks[ti]; if(!t) return;
+  t._subOpen = !t._subOpen;
+  const row = document.getElementById("subpanel-"+ti);
+  if(row){
+    row.style.display = t._subOpen ? "" : "none";
+    if(t._subOpen) row.querySelector("td").innerHTML = renderSubPanel(t,ti);
+  }
+  refreshSubBtn(ti);
+}
+
+function toggleGanttL3(ti,si){
+  const s=STATE.tasks[ti]?.subtasks[si]; if(!s) return;
+  s._ganttChildOpen = s._ganttChildOpen === false ? true : false;
+  renderGantt();
+}
+
+function toggleGanttSub(ti){
+  const t = STATE.tasks[ti]; if(!t) return;
+  t._ganttSubOpen = t._ganttSubOpen === false ? true : false;
+  // Re-renderizar solo el Gantt (rápido, no guarda en Firebase)
+  renderGantt();
+}
+
+function addSubtask(ti){
+  const t = STATE.tasks[ti]; if(!t) return;
+  if(!t.subtasks) t.subtasks = [];
+  const defStart = t.start || STATE.project.start || "";
+  t.subtasks.push({
+    id:"S"+(t.subtasks.length+1), name:"", start:defStart,
+    dur:1, durUnit:"d", res:[], dep:null,
+    critical:false, isMilestone:false, status:"pendiente", done:false,
+    children:[], proveedor:""
+  });
+  save(); refreshSubPanel(ti);
+}
+
+function addSubtaskFromGantt(ti){
+  const t = STATE.tasks[ti]; if(!t) return;
+  const defStart = t.start || STATE.project.start || "";
+  t.subtasks.push({
+    id:"S"+(t.subtasks.length+1), name:"", start:defStart,
+    dur:1, durUnit:"h", res:[], dep:null,
+    critical:false, isMilestone:false, status:"pendiente", done:false,
+    children:[], proveedor:""
+  });
+  t._subOpen = true; // asegura que el panel quede abierto
+  save();
+
+  // Re-renderizar todo para reflejar la nueva subtarea en el Gantt
+  render();
+
+  // Abrir la sección de Tareas si está cerrada
+  const tasksDetails = document.querySelector("#viewMontaje details:has(#tasksTable)");
+  if(tasksDetails) tasksDetails.open = true;
+
+  // Scroll hasta la fila de la tarea en la tabla
+  setTimeout(()=>{
+    const taskRow = document.querySelector(`#tasksTable tr[data-idx="${ti}"]`);
+    if(taskRow){
+      taskRow.scrollIntoView({behavior:"smooth", block:"center"});
+    }
+    // Enfocar el campo nombre de la última subtarea agregada
+    const subPanel = document.getElementById("subpanel-"+ti);
+    if(subPanel && subPanel.style.display !== "none"){
+      const inputs = subPanel.querySelectorAll("input[type='text']");
+      const last = inputs[inputs.length-1];
+      if(last){
+        last.classList.remove("locked");
+        try{ last.readOnly=false; }catch(_){}
+        last.focus();
+      }
+    }
+  }, 120);
+  toast(`Subtarea S${t.subtasks.length} agregada a "${t.name}"`);
+}
+
+function setSubtask(ti,si,key,val){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks||!t.subtasks[si]) return;
+  const s=t.subtasks[si];
+  if(key==="dur" && s.durUnit==="d") val=Math.round(val);
+  if(key==="durUnit" && val==="d") s.dur=Math.round(s.dur||1);
+  s[key]=val; save();
+  if(["done","status","critical","isMilestone"].includes(key)) refreshSubPanel(ti);
+  else if(["dur","durUnit"].includes(key)){
+    // solo actualizar el campo Fin sin rerenderizar todo
+    const s=t.subtasks[si]; const en=subtaskEnd(s);
+    const endStr=`${fmtD(en)} ${fmtT(en)}`;
+    const row=document.getElementById("subpanel-"+ti);
+    if(row){
+      const trs=row.querySelectorAll("tbody tr");
+      if(trs[si]){
+        const endCell=trs[si].querySelector(".task-end-col b");
+        if(endCell) endCell.textContent=endStr;
+      }
+    }
+  }
+  refreshSubBtn(ti);
+}
+
+function setSubtaskDT(ti,si,part,val){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks||!t.subtasks[si]) return;
+  const s=t.subtasks[si];
+  const curTime = isoToTime(s.start) || isoToTime(t.start) || "08:00";
+  if(part==="date") s.start = combineDT(val, curTime);
+  save();
+  // actualizar solo la celda Fin
+  const en=subtaskEnd(s); const endStr=`${fmtD(en)} ${fmtT(en)}`;
+  const row=document.getElementById("subpanel-"+ti);
+  if(row){ const trs=row.querySelectorAll("tbody tr"); if(trs[si]){ const ec=trs[si].querySelector(".task-end-col b"); if(ec) ec.textContent=endStr; } }
+}
+
+function delSubtask(ti,si){
+  const t=STATE.tasks[ti]; if(!t||!t.subtasks) return;
+  const name=t.subtasks[si]?.name||"esta subtarea";
+  if(!confirm(`¿Borrar "${name}"?`)) return;
+  t.subtasks.splice(si,1);
+  // Si no quedan subtareas, cerrar el panel automáticamente
+  if(t.subtasks.length===0) t._subOpen=false;
+  save(); refreshSubPanel(ti);
+}
+
+function moveTask(idx, dir){
+  const tasks = STATE.tasks;
+  const newIdx = idx + dir;
+  if(newIdx < 0 || newIdx >= tasks.length) return;
+  const [t] = tasks.splice(idx, 1);
+  tasks.splice(newIdx, 0, t);
+  save(); render();
+}
+
+// Mover al principio o al final
+function moveTaskToTop(idx){
+  if(idx===0) return;
+  const [t] = STATE.tasks.splice(idx,1);
+  STATE.tasks.unshift(t);
+  save(); render();
+}
+function moveTaskToBottom(idx){
+  if(idx===STATE.tasks.length-1) return;
+  const [t] = STATE.tasks.splice(idx,1);
+  STATE.tasks.push(t);
+  save(); render();
+}
+
+/* ---- DRAG SUBTAREAS ---- */
+let subDragState = null; // {ti, si}
+
+function onSubDragStart(e, ti, si){
+  subDragState = {ti, si};
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", `${ti}:${si}`);
+  e.currentTarget.classList.add("dragging-source");
+  e.currentTarget.closest("tr")?.classList.add("dragging");
+}
+function onSubDragEnd(e){
+  e.currentTarget.classList.remove("dragging-source");
+  e.currentTarget.closest("tr")?.classList.remove("dragging");
+  document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom"));
+  subDragState = null;
+}
+function onSubDragOver(e, ti){
+  e.preventDefault();
+  if(!subDragState || subDragState.ti !== ti) return;
+  e.dataTransfer.dropEffect = "move";
+  const row = e.currentTarget;
+  const mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height/2;
+  row.classList.remove("drag-over-top","drag-over-bottom");
+  row.classList.add(e.clientY < mid ? "drag-over-top" : "drag-over-bottom");
+}
+function onSubDragLeave(e){
+  e.currentTarget.classList.remove("drag-over-top","drag-over-bottom");
+}
+function onSubDrop(e, ti, toSi){
+  e.preventDefault();
+  document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom"));
+  if(!subDragState || subDragState.ti !== ti) return;
+  const fromSi = subDragState.si;
+  if(fromSi === toSi){ subDragState=null; return; }
+  const t = STATE.tasks[ti]; if(!t) return;
+  const mid = e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height/2;
+  const dropBefore = e.clientY < mid;
+  const [moved] = t.subtasks.splice(fromSi, 1);
+  let insertAt = toSi;
+  if(fromSi < toSi) insertAt = toSi - 1;
+  if(!dropBefore) insertAt += 1;
+  insertAt = Math.max(0, Math.min(t.subtasks.length, insertAt));
+  t.subtasks.splice(insertAt, 0, moved);
+  subDragState = null;
+  save(); refreshSubPanel(ti);
+}
+
+function onHandleDragStart(e, idx){
+  taskDragIdx = idx;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", String(idx));
+  e.currentTarget.classList.add("dragging-source");
+  // Marcar la fila entera como dragging source
+  const tr = e.currentTarget.closest("tr");
+  if(tr) tr.classList.add("dragging");
+}
+function onHandleDragEnd(e){
+  e.currentTarget.classList.remove("dragging-source");
+  const tr = e.currentTarget.closest("tr");
+  if(tr) tr.classList.remove("dragging");
+  document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom"));
+  taskDragIdx = null;
+}
+
+function onTaskDragStart(e, idx){ taskDragIdx=idx; e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain",String(idx)); e.currentTarget.classList.add("dragging"); }
+function onTaskDragOver(e){ e.preventDefault(); if(taskDragIdx===null) return; e.dataTransfer.dropEffect="move"; const row=e.currentTarget; const rect=row.getBoundingClientRect(); const mid=rect.top+rect.height/2; row.classList.remove("drag-over-top","drag-over-bottom"); row.classList.add(e.clientY<mid?"drag-over-top":"drag-over-bottom"); }
+function onTaskDragLeave(e){ e.currentTarget.classList.remove("drag-over-top","drag-over-bottom"); }
+function onTaskDrop(e, toIdx){
+  e.preventDefault();
+  const row=e.currentTarget; const rect=row.getBoundingClientRect(); const mid=rect.top+rect.height/2; const dropBefore=e.clientY<mid;
+  document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom"));
+  if(taskDragIdx===null||taskDragIdx===toIdx) return;
+  const [moved]=STATE.tasks.splice(taskDragIdx,1);
+  let insertAt=toIdx; if(taskDragIdx<toIdx) insertAt=toIdx-1; if(!dropBefore) insertAt+=1;
+  insertAt=Math.max(0,Math.min(STATE.tasks.length,insertAt));
+  STATE.tasks.splice(insertAt,0,moved); taskDragIdx=null; save(); render();
+}
+function onTaskDragEnd(e){ e.currentTarget.classList.remove("dragging"); e.currentTarget.removeAttribute("draggable"); document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom")); taskDragIdx=null; }
+function renderTaskRes(t, tidx){
+  const chips = t.res.map((r,ri)=>`<span class="chip" style="background:${resColor(r.r)}"><span>${esc(r.r.split(" ")[0])}</span>×<input type="number" min="1" value="${r.n}" onchange="setTaskRes(${tidx},${ri},'n',parseInt(this.value))"><button onclick="delTaskRes(${tidx},${ri})">×</button></span>`).join("");
+  const opts  = STATE.resources.map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join("");
+  return `${chips}<select onchange="addTaskRes(${tidx},this.value);this.selectedIndex=0"><option value="">+ recurso</option>${opts}</select>`;
+}
+function setTask(i,k,v){
+  if(!STATE.tasks[i]) return;
+  if(k==="dur" && STATE.tasks[i].durUnit==="d") v=Math.round(v);
+  if(k==="durUnit" && v==="d") STATE.tasks[i].dur=Math.round(STATE.tasks[i].dur||1);
+  STATE.tasks[i][k]=v; save(); render();
+}
+function toggleTaskMilestone(taskId){
+  const t=STATE.tasks.find(x=>x.id===taskId); if(!t) return;
+  t.isMilestone=!t.isMilestone; save(); render();
+  toast(t.isMilestone?`"${t.name}" marcada como hito`:`"${t.name}" ya no es hito`);
+}
+function toggleTaskCritical(taskId){
+  const t=STATE.tasks.find(x=>x.id===taskId); if(!t) return;
+  t.critical=!t.critical; save(); render();
+  toast(t.critical?`"${t.name}" marcada como crítica`:`"${t.name}" ya no es crítica`);
+}
+function setTaskDT(i, which, val){
+  const t=STATE.tasks[i]; if(!t) return;
+  const d = which==="date" ? val : isoToDate(t.start);
+  const tm = isoToTime(t.start) || "08:00"; // preservar hora existente, default 08:00
+  t.start=combineDT(d, tm); save(); render();
+}
+function addTask(){
+  const n = STATE.tasks.length + 1;
+  const lastTask = STATE.tasks[STATE.tasks.length-1];
+  const lastEnd = lastTask ? taskEnd(lastTask) : parseD(STATE.project.start);
+  const startDate = (!isNaN(lastEnd) && lastEnd > parseD(STATE.project.start))
+    ? toLocalISO(lastEnd)
+    : STATE.project.start || toLocalISO(new Date());
+  STATE.tasks.push({
+    id:          "M"+String(n).padStart(2,"0"),
+    name:        "Nueva tarea",
+    start:       startDate,
+    dur:         1,
+    durUnit:     "d",
+    proveedor:   "",
+    res:         [],
+    dep:         null,
+    critical:    false,
+    isMilestone: false,
+    status:      "pendiente",
+    subtasks:    [],
+    done:        false
+  });
+  save(); render();
+}
+function delTask(i){ if(!confirm(`¿Borrar la tarea "${STATE.tasks[i]?.name||""}"? Esta acción no se puede deshacer.`)) return; STATE.tasks.splice(i,1); save(); render(); }
+function setTaskRes(ti,ri,k,v){ STATE.tasks[ti].res[ri][k]=v; save(); render(); }
+function delTaskRes(ti,ri){ STATE.tasks[ti].res.splice(ri,1); save(); render(); }
+function addTaskRes(ti,r){ if(!r) return; STATE.tasks[ti].res.push({r,n:1}); save(); render(); }
+
+function renumberTaskIds(){
+  if(!STATE.tasks.length){ toast("Sin tareas"); return; }
+  if(!confirm(`Renumerar los ${STATE.tasks.length} IDs a M01…M${String(STATE.tasks.length).padStart(2,"0")} según el orden actual?\n\nLas dependencias entre tareas se actualizan automáticamente.`)) return;
+  const idMap={};
+  STATE.tasks.forEach((t,i)=>{ idMap[t.id]="M"+String(i+1).padStart(2,"0"); });
+  STATE.tasks.forEach(t=>{ if(t.dep&&idMap[t.dep]) t.dep=idMap[t.dep]; t.id=idMap[t.id]||t.id; });
+  save(); render(); toast("IDs renumerados · dependencias remapeadas");
+}
+
+function autoSchedule(){
+  const byId=Object.fromEntries(STATE.tasks.map(t=>[t.id,t]));
+  const done=new Set();
+  function resolve(t){ if(done.has(t.id)) return; if(t.dep&&byId[t.dep]){ resolve(byId[t.dep]); const prevEnd=taskEnd(byId[t.dep]); t.start=toLocalISO(prevEnd); } done.add(t.id); }
+  STATE.tasks.forEach(resolve);
+  save(); render(); toast("Recalculado por dependencias");
+}
+
+function fitTasksToProject(){
+  if(!STATE.tasks.length){ toast("No hay tareas"); return; }
+  const projStartMs=parseD(STATE.project.start).getTime();
+  const projEndMs  =parseD(STATE.project.end).getTime();
+  if(!isFinite(projStartMs)){ toast("Ingreso predio inválido"); return; }
+  let minStart=Infinity;
+  STATE.tasks.forEach(t=>{ const s=parseD(t.start).getTime(); if(isFinite(s)&&s<minStart) minStart=s; });
+  if(!isFinite(minStart)){ toast("Fechas de tareas inválidas"); return; }
+  const offsetMs=projStartMs-minStart;
+  if(offsetMs===0){ toast("Las tareas ya arrancan en el ingreso"); return; }
+  STATE.tasks.forEach(t=>{ const newStart=new Date(parseD(t.start).getTime()+offsetMs); t.start=toLocalISO(newStart); });
+  let maxEnd=-Infinity, overflowing=0;
+  STATE.tasks.forEach(t=>{ const e=parseD(t.start).getTime()+t.dur*3600000; if(isFinite(e)){ if(e>maxEnd) maxEnd=e; if(e>projEndMs) overflowing++; } });
+  save(); render();
+  const dirMsg=offsetMs>0?`adelantadas ${(offsetMs/3600000).toFixed(1)}h`:`atrasadas ${(-offsetMs/3600000).toFixed(1)}h`;
+  if(overflowing>0){ const overH=Math.ceil((maxEnd-projEndMs)/3600000); toast(`Tareas ${dirMsg} · ⚠ ${overflowing} tarea(s) exceden el hito final por ${overH}h`); }
+  else { toast(`Tareas ${dirMsg} · todo encaja en la ventana del evento`); }
+}
+function setJornada24(){ STATE.project.dayStart="00:00"; STATE.project.dayEnd="23:59"; syncInputs(); save(); render(); }
+function setJornadaDefault(){ STATE.project.dayStart="07:00"; STATE.project.dayEnd="22:00"; syncInputs(); save(); render(); }
+
+/* ---- HITOS ---- */
+function renderMilestones(){
+  const taskHitos=STATE.tasks.filter(t=>t.isMilestone);
+  document.getElementById("hCount").textContent=`${STATE.milestones.length+taskHitos.length} hitos`;
+  const box=document.getElementById("milestonesList");
+  let html=`<table><thead><tr><th>Nombre</th><th style="width:250px">Fecha/hora</th><th style="width:70px"></th></tr></thead><tbody>`;
+  html+=STATE.milestones.map((m,i)=>`<tr>
+    <td><input type="text" value="${esc(m.name)}" onchange="setMile(${i},'name',this.value)"></td>
+    <td style="white-space:nowrap">
+      <input type="date" lang="en-GB" value="${isoToDate(m.at)}" onchange="setMileDT(${i},'date',this.value)" style="width:115px">
+      <input type="text" placeholder="HH:MM" maxlength="5" pattern="\\d{1,2}:\\d{2}" value="${esc(isoToTime(m.at))}" onchange="setMileDT(${i},'time',this.value)" style="width:60px;font-family:ui-monospace,monospace;text-align:center" title="Formato 24 h">
+    </td>
+    <td style="text-align:center"><button class="del" ondblclick="delMile(${i})" title="Doble-clic para eliminar">✕</button></td>
+  </tr>`).join("");
+  html+=taskHitos.map(t=>{ const d=parseD(t.start); return `<tr style="background:rgba(255,122,26,.05)"><td>◆ <b>${esc(t.name)}</b> <span style="display:inline-block;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px">← Tarea ${esc(t.id)}</span></td><td style="font-family:ui-monospace,monospace;color:var(--muted)">${fmtD(d)} ${fmtT(d)}</td><td style="text-align:center"><button class="hito-btn active" ondblclick="toggleTaskMilestone('${esc(t.id)}')" title="Doble-clic para desmarcar como hito">H</button></td></tr>`; }).join("");
+  html+=`</tbody></table>`;
+  box.innerHTML=html;
+}
+function setMile(i,k,v){ STATE.milestones[i][k]=v; save(); render(); }
+function setMileDT(i,which,val){
+  const m=STATE.milestones[i]; if(!m) return;
+  let d=which==="date"?val:isoToDate(m.at);
+  let tm=which==="time"?val:isoToTime(m.at);
+  if(which==="time"){ const norm=normalizeTime(val); if(norm===null){ toast("Hora inválida. Usá HH:MM (24h)"); render(); return; } tm=norm; }
+  m.at=combineDT(d,tm); save(); render();
+}
+function addMilestone(){ STATE.milestones.push({name:"Hito",at:STATE.project.start}); save(); render(); }
+function delMile(i){ if(!confirm(`¿Borrar el hito "${STATE.milestones[i]?.name||""}"?`)) return; STATE.milestones.splice(i,1); save(); render(); }
+
+/* ---- RECURSOS ---- */
+function resourceFirstUse(name){
+  let min=Infinity;
+  STATE.tasks.forEach(t=>{ if(t.res&&t.res.some(r=>r.r===name)){ const s=parseD(t.start).getTime(); if(isFinite(s)&&s<min) min=s; } });
+  return isFinite(min)?new Date(min):null;
+}
+function renderResources(){
+  document.getElementById("rCount").textContent=`${STATE.resources.length} recursos`;
+  const box=document.getElementById("resourcesTable");
+  box.innerHTML=`<thead><tr>
+    <th style="width:28px"></th><th>Recurso</th>
+    <th style="width:60px;text-align:center">Color</th>
+    <th style="width:90px;text-align:center">Capacidad</th>
+    <th style="width:150px;text-align:center">Ingreso</th>
+    <th style="width:80px;text-align:center">Borrar</th>
+  </tr></thead><tbody>
+  ${STATE.resources.map((r,i)=>{
+    const first=resourceFirstUse(r.name);
+    const firstLabel=first?`<span style="font-family:ui-monospace,monospace;font-size:11.5px">${fmtD(first)} ${fmtT(first)}</span>`:`<span class="muted">— sin uso</span>`;
+    return `<tr data-idx="${i}"
+      ondragstart="onResDragStart(event,${i})" ondragover="onResDragOver(event)"
+      ondragleave="onResDragLeave(event)" ondrop="onResDrop(event,${i})" ondragend="onResDragEnd(event)">
+    <td class="drag-handle" onmousedown="this.closest('tr').setAttribute('draggable','true')">⋮⋮</td>
+    <td><input type="text" value="${esc(r.name)}" onchange="setRes(${i},'name',this.value)"></td>
+    <td style="text-align:center"><input type="color" value="${r.color}" onchange="setRes(${i},'color',this.value)"></td>
+    <td style="text-align:center"><input type="number" min="0" value="${r.cap}" onchange="setRes(${i},'cap',parseInt(this.value))" style="width:60px;text-align:center"></td>
+    <td style="text-align:center">${firstLabel}</td>
+    <td style="text-align:center"><button class="del" ondblclick="delRes(${i})" title="Doble-clic para eliminar">✕</button></td>
+  </tr>`;
+  }).join("")}</tbody>`;
+}
+let resDragIdx=null;
+function onResDragStart(e,idx){ resDragIdx=idx; e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain",String(idx)); e.currentTarget.classList.add("dragging"); }
+function onResDragOver(e){ e.preventDefault(); if(resDragIdx===null) return; e.dataTransfer.dropEffect="move"; const row=e.currentTarget; const rect=row.getBoundingClientRect(); const mid=rect.top+rect.height/2; row.classList.remove("drag-over-top","drag-over-bottom"); row.classList.add(e.clientY<mid?"drag-over-top":"drag-over-bottom"); }
+function onResDragLeave(e){ e.currentTarget.classList.remove("drag-over-top","drag-over-bottom"); }
+function onResDrop(e,toIdx){ e.preventDefault(); const row=e.currentTarget; const rect=row.getBoundingClientRect(); const mid=rect.top+rect.height/2; const dropBefore=e.clientY<mid; document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom")); if(resDragIdx===null||resDragIdx===toIdx) return; const [moved]=STATE.resources.splice(resDragIdx,1); let insertAt=toIdx; if(resDragIdx<toIdx) insertAt=toIdx-1; if(!dropBefore) insertAt+=1; insertAt=Math.max(0,Math.min(STATE.resources.length,insertAt)); STATE.resources.splice(insertAt,0,moved); resDragIdx=null; save(); render(); }
+function onResDragEnd(e){ e.currentTarget.classList.remove("dragging"); e.currentTarget.removeAttribute("draggable"); document.querySelectorAll(".drag-over-top,.drag-over-bottom").forEach(el=>el.classList.remove("drag-over-top","drag-over-bottom")); resDragIdx=null; }
+function setRes(i,k,v){ STATE.resources[i][k]=v; save(); render(); }
+function addResource(){ STATE.resources.push({name:"Nuevo",color:"#64748b",cap:1}); save(); render(); }
+function delRes(i){ if(!confirm(`¿Borrar el recurso "${STATE.resources[i]?.name||""}"?`)) return; STATE.resources.splice(i,1); save(); render(); }
+
+/* ---- CHECKLIST ---- */
+function renderChecklist(){
+  const end=parseD(STATE.project.end);
+  const box=document.getElementById("checklist");
+  box.innerHTML=(STATE.checklist||[]).map((c,i)=>{
+    const when=new Date(end.getTime()-c.tminus*3600000);
+    return `<div class="check ${c.done?"done":""}">
+      <input type="checkbox" ${c.done?"checked":""} onchange="setChk(${i},'done',this.checked)">
+      <input type="text" value="${esc(c.txt)}" onchange="setChk(${i},'txt',this.value)">
+      <span class="when">${when.toLocaleString("es-AR",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false})}</span>
+      <span><input type="number" value="${c.tminus}" min="0" onchange="setChk(${i},'tminus',parseInt(this.value))"> <span class="muted">h</span></span>
+      <button class="del" ondblclick="delChk(${i})" title="Doble-clic para eliminar">✕</button>
+    </div>`;
+  }).join("")||`<p class="muted">Sin ítems.</p>`;
+}
+function setChk(i,k,v){ STATE.checklist[i][k]=v; save(); renderChecklist(); }
+function addCheck(){ STATE.checklist.push({tminus:24,txt:"Nuevo ítem",done:false}); save(); renderChecklist(); }
+function delChk(i){ if(!confirm(`¿Borrar el ítem "${STATE.checklist[i]?.txt||""}"?`)) return; STATE.checklist.splice(i,1); save(); renderChecklist(); }
+
+/* ---- RIESGOS ---- */
+function renderRisks(){
+  const box=document.getElementById("risksList");
+  box.innerHTML=(STATE.risks||[]).map((r,i)=>`
+    <div class="risk-item">
+      <div><input type="text" value="${esc(r.tipo)}" onchange="setRisk(${i},'tipo',this.value)" placeholder="Tipo"></div>
+      <div>
+        <input type="text" value="${esc(r.titulo)}" onchange="setRisk(${i},'titulo',this.value)" placeholder="Riesgo" style="font-weight:600;margin-bottom:4px">
+        <textarea onchange="setRisk(${i},'sol',this.value)" placeholder="Plan B">${esc(r.sol)}</textarea>
+      </div>
+      <div><button class="del" ondblclick="delRisk(${i})" title="Doble-clic para eliminar">✕</button></div>
+    </div>
+  `).join("")||`<p class="muted">Sin riesgos.</p>`;
+}
+function setRisk(i,k,v){ STATE.risks[i][k]=v; save(); }
+function addRisk(){ STATE.risks.push({tipo:"Tipo",titulo:"Riesgo",sol:"Plan B"}); save(); renderRisks(); }
+function delRisk(i){ if(!confirm(`¿Borrar el riesgo "${STATE.risks[i]?.titulo||""}"?`)) return; STATE.risks.splice(i,1); save(); renderRisks(); }
+
+/* ---- CONTACTOS ---- */
+function renderContacts(){
+  const box=document.getElementById("contactsList");
+  box.innerHTML=(STATE.contacts||[]).map((c,i)=>{
+    const tel=telHref(c.phone); const wa=waHref(c.phone);
+    const roleOpts=CONTACT_ROLES.map(r=>`<option value="${esc(r)}" ${c.role===r?"selected":""}>${esc(r)}</option>`).join("");
+    return `<div class="contact-card">
+      <div><select onchange="setContact(${i},'role',this.value)" style="width:100%;font-weight:700;font-size:11px;text-transform:uppercase;background:rgba(255,122,26,.14);color:var(--accent);border:1px solid rgba(255,122,26,.4)">${roleOpts}</select></div>
+      <div class="contact-body">
+        <input type="text" value="${esc(c.name)}" placeholder="Nombre/empresa" onchange="setContact(${i},'name',this.value)">
+        <input type="tel" value="${esc(c.phone)}" placeholder="+54 9 11..." onchange="setContact(${i},'phone',this.value)">
+        <div style="display:flex;gap:5px">
+          <a href="${tel||"#"}" class="btn-action call ${tel?"":"disabled"}">📞</a>
+          <a href="${wa||"#"}" target="_blank" rel="noopener" class="btn-action wa ${wa?"":"disabled"}">💬</a>
+        </div>
+        <div class="note-line"><input type="text" value="${esc(c.note)}" placeholder="Nota" onchange="setContact(${i},'note',this.value)"></div>
+      </div>
+      <div><button class="del" ondblclick="delContact(${i})" title="Doble-clic para eliminar">✕</button></div>
+    </div>`;
+  }).join("")||`<p class="muted">Sin contactos.</p>`;
+}
+function setContact(i,k,v){ STATE.contacts[i][k]=v; save(); renderContacts(); }
+function addContact(){ STATE.contacts.push({role:"Otro",name:"",phone:"",note:""}); save(); renderContacts(); }
+function delContact(i){ if(!confirm(`¿Borrar el contacto "${STATE.contacts[i]?.name||STATE.contacts[i]?.role||""}"?`)) return; STATE.contacts.splice(i,1); save(); renderContacts(); }
+
+/* ---- DATOS DEL SITIO ---- */
+function renderSiteData(){
+  const box=document.getElementById("siteDataList");
+  const order=Object.fromEntries(SITE_CATS.map((c,i)=>[c.key,i]));
+  const indexed=(STATE.siteData||[]).map((d,i)=>({...d,_idx:i}));
+  indexed.sort((a,b)=>(order[a.category]??99)-(order[b.category]??99));
+  const catOpts=(sel)=>SITE_CATS.map(c=>`<option value="${c.key}" ${sel===c.key?"selected":""}>${c.label}</option>`).join("");
+  box.innerHTML=indexed.map(d=>{
+    const cat=SITE_CATS.find(c=>c.key===d.category)||SITE_CATS[SITE_CATS.length-1];
+    return `<div class="sdata-row">
+      <select class="cat-pill" style="background:${cat.color}22;color:${cat.color};border:1px solid ${cat.color}66" onchange="setSiteData(${d._idx},'category',this.value)">${catOpts(d.category)}</select>
+      <input type="text" value="${esc(d.label)}" placeholder="Dato" onchange="setSiteData(${d._idx},'label',this.value)">
+      <input type="text" value="${esc(d.value)}" placeholder="Valor" onchange="setSiteData(${d._idx},'value',this.value)">
+      <button class="del" ondblclick="delSiteData(${d._idx})" title="Doble-clic para eliminar">✕</button>
+    </div>`;
+  }).join("")||`<p class="muted">Sin datos.</p>`;
+}
+function setSiteData(i,k,v){ STATE.siteData[i][k]=v; save(); renderSiteData(); }
+function addSiteData(){ STATE.siteData.push({category:"otro",label:"",value:""}); save(); renderSiteData(); }
+function delSiteData(i){ if(!confirm(`¿Borrar el dato "${STATE.siteData[i]?.label||""}"?`)) return; STATE.siteData.splice(i,1); save(); renderSiteData(); }
+
+/* ---- TEMAS / REUNIÓN TÉCNICA ---- */
+function renderMeeting(){
+  const box=document.getElementById("meetingList"); if(!box) return;
+  if(!STATE.meetingItems) STATE.meetingItems=[];
+  if(STATE.meetingItems.length===0){ box.innerHTML=`<p class="muted" style="margin:4px 0 0;font-size:12px">Sin temas cargados.</p>`; return; }
+  box.innerHTML=STATE.meetingItems.map((m,i)=>`
+    <div class="meeting-row ${m.done?'done':''}">
+      <span class="meeting-num">${i+1}.</span>
+      <input type="checkbox" ${m.done?"checked":""} onchange="setMeetingItem(${i},'done',this.checked)" title="Marcar como tratado">
+      <input type="text" value="${esc(m.txt)}" placeholder="Tema o punto a tratar…"
+        onchange="setMeetingItem(${i},'txt',this.value)"
+        onkeydown="onMeetingKey(event,${i})">
+      <button class="del" ondblclick="delMeetingItem(${i})" title="Doble-clic para eliminar">✕</button>
+    </div>
+  `).join("");
+}
+function setMeetingItem(i,k,v){ if(!STATE.meetingItems||!STATE.meetingItems[i]) return; STATE.meetingItems[i][k]=v; save(); if(k==="done") renderMeeting(); }
+function addMeetingItem(focusNew=true){
+  if(!STATE.meetingItems) STATE.meetingItems=[];
+  STATE.meetingItems.push({txt:"",done:false}); save(); renderMeeting();
+  if(focusNew){ setTimeout(()=>{ const inputs=document.querySelectorAll("#meetingList input[type='text']"); const last=inputs[inputs.length-1]; if(last){ last.classList.remove("locked"); try{ last.readOnly=false; }catch(_){} last.focus(); } },20); }
+}
+function delMeetingItem(i){ if(!STATE.meetingItems||!STATE.meetingItems[i]) return; const txt=STATE.meetingItems[i].txt||"(sin texto)"; if(!confirm(`¿Borrar el tema "${txt}"?`)) return; STATE.meetingItems.splice(i,1); save(); renderMeeting(); }
+function onMeetingKey(e,idx){
+  if(e.key==="Enter"){ e.preventDefault(); if(STATE.meetingItems&&STATE.meetingItems[idx]) STATE.meetingItems[idx].txt=e.target.value; save(); addMeetingItem(true); }
+  else if(e.key==="Backspace"&&e.target.value===""&&STATE.meetingItems.length>1){ e.preventDefault(); STATE.meetingItems.splice(idx,1); save(); renderMeeting(); setTimeout(()=>{ const inputs=document.querySelectorAll("#meetingList input[type='text']"); const prev=inputs[Math.max(0,idx-1)]; if(prev){ prev.classList.remove("locked"); try{ prev.readOnly=false; }catch(_){} prev.focus(); const len=prev.value.length; prev.setSelectionRange(len,len); } },20); }
+}
+
+/* ---- COUNTDOWN ---- */
+function renderCountdown(){
+  const now=new Date(); const end=parseD(STATE.project.end); const el=document.getElementById("countdown");
+  if(end<=now){ el.innerHTML=`<span class="muted">pasó</span><small>${esc(STATE.project.eventName||"hito")}</small>`; return; }
+  let diff=end-now;
+  const d=Math.floor(diff/86400000); diff%=86400000;
+  const h=Math.floor(diff/3600000); diff%=3600000;
+  const m=Math.floor(diff/60000);
+  el.innerHTML=`${d}d ${h}h ${m}m<small>a ${esc(STATE.project.eventName||"hito")}</small>`;
+}
+setInterval(renderCountdown, 30000);
+
+/* ---- DRAG TO EDIT GANTT BARS (tareas + subtareas) ---- */
+let dragState=null;
+
+function onGanttPointerDown(e){
+  const bar=e.target.closest(".bar"); if(!bar) return;
+  e.preventDefault();
+
+  // ¿Es subtarea?
+  const sid = bar.dataset.sid;
+  const tid = bar.dataset.tid;
+
+  if(sid !== undefined && tid){
+    // Subtarea
+    const t    = STATE.tasks.find(x=>x.id===tid); if(!t) return;
+    const si   = parseInt(sid,10);
+    const s    = t.subtasks[si]; if(!s) return;
+    let mode   = "move";
+    const handle = e.target.closest(".handle");
+    if(handle) mode = handle.dataset.handle==="l"?"left":"right";
+    dragState = {
+      isSub:true, tid, si, mode, bar,
+      startX:e.clientX,
+      origLeft:parseFloat(bar.style.left)||0,
+      origWidth:parseFloat(bar.style.width)||0,
+      origStart:parseD(s.start).getTime(),
+      origDur: s.dur,
+      origDurUnit: s.durUnit||"h",
+      moved:false
+    };
+  } else if(tid){
+    // Tarea principal
+    const t=STATE.tasks.find(x=>x.id===tid); if(!t) return;
+    let mode="move";
+    const handle=e.target.closest(".handle");
+    if(handle) mode=handle.dataset.handle==="l"?"left":"right";
+    dragState={
+      isSub:false, tid, mode, bar,
+      startX:e.clientX,
+      origLeft:parseFloat(bar.style.left)||0,
+      origWidth:parseFloat(bar.style.width)||0,
+      origStart:parseD(t.start).getTime(),
+      origDur:t.dur,
+      moved:false
+    };
+  } else return;
+
+  bar.classList.add("dragging");
+  try{ bar.setPointerCapture(e.pointerId); }catch(_){}
+}
+
+function onGanttPointerMove(e){
+  if(!dragState) return;
+  const dx       = e.clientX - dragState.startX;
+  const slotsDelta = Math.round(dx / SLOT_PX);
+  const pxDelta    = slotsDelta * SLOT_PX;
+  const bar        = dragState.bar;
+  if(dragState.mode==="move"){
+    bar.style.left = Math.max(0, dragState.origLeft + pxDelta)+"px";
+  } else if(dragState.mode==="right"){
+    bar.style.width = Math.max(SLOT_PX, dragState.origWidth + pxDelta)-2+"px";
+  } else if(dragState.mode==="left"){
+    const newLeft  = dragState.origLeft + pxDelta;
+    const newWidth = dragState.origWidth - pxDelta;
+    if(newWidth >= SLOT_PX && newLeft >= 0){
+      bar.style.left  = newLeft+"px";
+      bar.style.width = (newWidth-2)+"px";
+    }
+  }
+  if(slotsDelta !== 0) dragState.moved = true;
+}
+
+function onGanttPointerUp(e){
+  if(!dragState) return;
+  const bar     = dragState.bar;
+  const wasMoved = dragState.moved;
+
+  if(wasMoved){
+    const newLeftPx  = parseFloat(bar.style.left)||0;
+    const newWidthPx = (parseFloat(bar.style.width)||0)+2;
+    const newStartIdx = Math.round(newLeftPx / SLOT_PX);
+    const newEndIdx   = Math.round((newLeftPx + newWidthPx) / SLOT_PX);
+
+    if(dragState.isSub){
+      // ── Subtarea ──
+      const t  = STATE.tasks.find(x=>x.id===dragState.tid);
+      const s  = t?.subtasks?.[dragState.si];
+      if(t && s){
+        const parentStart = parseD(t.start).getTime();
+        const parentEnd   = taskEnd(t).getTime();
+        let newSubStart, newSubDurH;
+
+        if(dragState.mode==="move"){
+          const ns = visIdxToTime(newStartIdx);
+          if(!ns){ bar.classList.remove("dragging"); dragState=null; return; }
+          const ne = subtaskEnd({...s, start: toLocalISO(ns)});
+          newSubStart = ns.getTime();
+          newSubDurH  = durToHours(s);
+        } else if(dragState.mode==="right"){
+          const ne = visIdxToTime(newEndIdx);
+          if(!ne){ bar.classList.remove("dragging"); dragState=null; return; }
+          newSubStart = parseD(s.start).getTime();
+          newSubDurH  = Math.max(SLOT_PX/SLOT_PX * (GRANU/60), (ne.getTime()-newSubStart)/3600000);
+        } else {
+          const ns = visIdxToTime(newStartIdx);
+          if(!ns){ bar.classList.remove("dragging"); dragState=null; return; }
+          newSubStart = ns.getTime();
+          const origEndMs = dragState.origStart + durToHours(s)*3600000;
+          newSubDurH  = (origEndMs - newSubStart)/3600000;
+          if(newSubDurH < GRANU/60){ bar.classList.remove("dragging"); dragState=null; render(); return; }
+        }
+
+        const newSubEnd = newSubStart + newSubDurH * 3600000;
+        const outsideStart = newSubStart < parentStart;
+        const outsideEnd   = newSubEnd   > parentEnd;
+
+        const applyChange = ()=>{
+          const newStart = new Date(newSubStart);
+          s.start = toLocalISO(newStart);
+          if(s.durUnit==="d") s.dur = Math.max(1, Math.round(newSubDurH/24));
+          else                 s.dur = Math.max(GRANU/60, Math.round(newSubDurH*100)/100);
+          // Extender tarea padre si la subtarea se pasa
+          if(outsideStart){
+            t.start = toLocalISO(new Date(newSubStart));
+          }
+          if(outsideEnd){
+            const newParentEndMs = newSubStart + newSubDurH*3600000;
+            const newParentDurH  = (newParentEndMs - parseD(t.start).getTime())/3600000;
+            if(t.durUnit==="d") t.dur = Math.max(1, Math.round(newParentDurH/24));
+            else                 t.dur = Math.max(1, Math.round(newParentDurH*100)/100);
+          }
+          save(); render();
+        };
+        applyChange();
+      }
+    } else {
+      // ── Tarea principal ──
+      const t = STATE.tasks.find(x=>x.id===dragState.tid);
+      if(t){
+        if(dragState.mode==="move"){
+          const newStart=visIdxToTime(newStartIdx);
+          if(newStart) t.start=toLocalISO(newStart);
+        } else if(dragState.mode==="right"){
+          const newEnd=visIdxToTime(newEndIdx);
+          if(newEnd){
+            const rawDur=(newEnd.getTime()-parseD(t.start).getTime())/3600000;
+            if(t.durUnit==="d") t.dur=Math.max(1,Math.round(rawDur/24));
+            else                 t.dur=Math.max(GRANU/60,Math.round(rawDur*100)/100);
+          }
+        } else {
+          const newStart=visIdxToTime(newStartIdx);
+          if(newStart){
+            const origEndMs=dragState.origStart+durToHours({dur:dragState.origDur,durUnit:dragState.origDurUnit||"d"})*3600000;
+            const newDurH=(origEndMs-newStart.getTime())/3600000;
+            if(newDurH>=GRANU/60){
+              t.start=toLocalISO(newStart);
+              if(t.durUnit==="d") t.dur=Math.max(1,Math.round(newDurH/24));
+              else                 t.dur=Math.max(GRANU/60,Math.round(newDurH*100)/100);
+            }
+          }
+        }
+        save();
+      }
+    }
+  }
+  bar.classList.remove("dragging");
+  dragState=null;
+  if(wasMoved) render();
+}
+
+/* ============================================================
+   EXPORT PDF
+   ============================================================ */
+let LOGO_DATA_URL=null;
+function preloadLogo(){
+  const img=document.getElementById("logoImg");
+  if(img){
+    const tryCanvas=()=>{ if(!img.complete||img.naturalWidth===0) return false; try{ const c=document.createElement("canvas"); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext("2d").drawImage(img,0,0); LOGO_DATA_URL=c.toDataURL("image/png"); return true; }catch(e){ return false; } };
+    if(img.complete){ if(tryCanvas()) return; } else { img.addEventListener("load",()=>{ if(!tryCanvas()) xhrFallback(); }); return; }
+  }
+  xhrFallback();
+  function xhrFallback(){ try{ const xhr=new XMLHttpRequest(); xhr.open("GET","logo.png",true); xhr.responseType="blob"; xhr.onload=()=>{ if((xhr.status===0||(xhr.status>=200&&xhr.status<300))&&xhr.response){ const reader=new FileReader(); reader.onloadend=()=>LOGO_DATA_URL=reader.result; reader.readAsDataURL(xhr.response); } }; xhr.onerror=()=>{}; xhr.send(); }catch(e){} }
+}
+function getLogoDataURL(){ return LOGO_DATA_URL; }
+
+function exportPDF(){
+  const logoSrc=getLogoDataURL()||new URL("logo.png",document.baseURI).href;
+  const html=buildPrintHTML(logoSrc);
+  const w=window.open("","_blank");
+  if(!w){ alert("El navegador bloqueó la ventana emergente.\nPermitila y volvé a clickear 📄 PDF."); return; }
+  w.document.open(); w.document.write(html); w.document.close(); w.focus();
+  setTimeout(()=>{ try{ w.print(); }catch(_){} },350);
+}
+
+function buildPrintHTML(logoSrc){
+  const p=STATE.project;
+  const start=parseD(p.start);
+  const end=parseD(p.end);
+  const totalH=(end-start)/3600000;
+  const totalD=totalH/24;
+  const logoURL=logoSrc||new URL("logo.png",document.baseURI).href;
+  const statusLabels={pendiente:"Pendiente",en_curso:"En curso",hecho:"Hecho",riesgo:"Riesgo",bloqueado:"Bloqueado"};
+  const statusPill=(s)=>{ const cls=s==="hecho"?"ok":(s==="riesgo"||s==="bloqueado"?"crit":s==="en_curso"?"info":"muted"); return `<span class="pill ${cls}">${statusLabels[s]||s}</span>`; };
+  const catOrder=Object.fromEntries(SITE_CATS.map((c,i)=>[c.key,i]));
+  const siteSorted=[...(STATE.siteData||[])].sort((a,b)=>(catOrder[a.category]??99)-(catOrder[b.category]??99));
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>${esc(p.name||"Montaje")} — Resumen</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.4; margin: 0; }
+  h1 { font-size: 22pt; color: #ea580c; margin: 0 0 3pt; letter-spacing:.3pt }
+  h2 { font-size: 13pt; color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 2pt; margin: 14pt 0 6pt; letter-spacing:.3pt; text-transform:uppercase }
+  .hdr { border-bottom: 3px solid #111; padding-bottom: 10pt; margin-bottom: 10pt; }
+  .hdr .meta { color: #555; font-size: 10pt; margin-top: 4pt; line-height:1.6 }
+  .kpis { display: flex; gap: 14pt; margin-top: 10pt; flex-wrap: wrap; }
+  .kpis .k { font-size: 8.5pt; color:#666; text-transform:uppercase; letter-spacing:.3pt }
+  .kpis .k b { display: block; font-size: 15pt; color: #111; margin-top:1pt; text-transform:none; letter-spacing:0 }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 6pt; }
+  th, td { border: 1px solid #d4d4d4; padding: 3pt 5pt; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 700; color: #333; font-size: 8.5pt; text-transform:uppercase; letter-spacing:.2pt }
+  tr.crit td { background: #fff8eb; }
+  tr.done td { color: #888; }
+  .pill { display: inline-block; padding: 1pt 6pt; border-radius: 3pt; font-size: 8pt; font-weight: 700; white-space:nowrap }
+  .pill.crit { background: #fee2e2; color: #b91c1c; }
+  .pill.warn { background: #fef3c7; color: #92400e; }
+  .pill.ok { background: #d1fae5; color: #065f46; }
+  .pill.info { background: #dbeafe; color: #1e40af; }
+  .pill.muted { background: #e5e7eb; color: #4b5563; }
+  .res-chip { display: inline-block; padding: 1pt 5pt; border-radius: 3pt; font-size: 8pt; margin: 1pt 2pt 1pt 0; color: #111; font-weight:600 }
+  .section { page-break-inside: avoid; }
+  .color-sw { display: inline-block; width: 12pt; height: 12pt; border-radius: 2pt; border: 1px solid #999; vertical-align: -2pt; margin-right: 5pt; }
+  .cat-pill { display: inline-block; padding: 1pt 5pt; border-radius: 3pt; font-size: 8pt; font-weight: 700; text-transform: uppercase; }
+  .page-break { page-break-before: always; break-before: page; }
+  .print-hint { background:#fff4e0; border:3px solid #ea580c; color:#7a3b00; padding:14pt 18pt; border-radius:6pt; font-size:12pt; margin:0 0 14pt; box-shadow:0 2px 8px rgba(234,88,12,.25); line-height:1.5 }
+  .print-hint b { color:#ea580c; font-size:13pt }
+  .page-footer { display: flex; justify-content: space-between; align-items: center; padding: 8pt 0 6pt; border-top: 1px solid #e5e5e5; font-size: 9pt; color: #555; }
+  .page-footer .foot-left { display: flex; align-items: center }
+  .page-footer .foot-left img { height: 34pt; display: inline-block }
+  .page-footer .foot-left .logo { font-family: Impact, "Arial Black", "Helvetica Neue", sans-serif; font-size: 22pt; font-weight: 900; color: #111; letter-spacing: 2pt; transform: skew(-8deg); display: inline-block; line-height: 1 }
+  .page-footer .foot-right { font-family: ui-monospace, monospace; text-align: right; white-space: nowrap }
+  .page-num::before { content: counter(page) }
+  .page-total::before { content: counter(pages) }
+  @media print {
+    .print-hint, .btn-print { display: none !important; }
+    .page-footer { position: fixed; bottom: 0; left: 14mm; right: 14mm; background: #fff; z-index: 999; }
+    body { padding-bottom: 70pt !important; }
+  }
+  .empty { color: #888; font-style: italic; }
+  @media print { .no-print { display: none !important; } }
+  .btn-print { position: fixed; top: 10px; right: 10px; background:#ea580c; color:#fff; border:0; padding:8px 14px; border-radius:6px; font-weight:700; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.2); font-size:12px }
+</style>
+</head>
+<body>
+<button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+<div class="print-hint">
+  <b>⚠ IMPORTANTE antes de imprimir:</b><br>
+  1. En el diálogo de impresión, abrí <b>"Más opciones"</b> (o "More settings")<br>
+  2. <b>Desmarcá</b> la opción <b>"Encabezados y pies de página"</b> (o "Headers and footers")<br>
+  <span style="font-size:10pt;color:#8b5a00">Sin ese paso, el navegador va a agregar automáticamente la URL y "Página X de Y" arriba y abajo de cada hoja.</span>
+</div>
+<div class="hdr">
+  <h1>${esc(p.name||"Montaje en sitio")}</h1>
+  <div class="meta">
+    <b>Predio:</b> ${esc(p.location||"—")}<br>
+    <b>Ingreso al predio:</b> ${fmtD(start)} ${fmtT(start)}<br>
+    <b>Hito final:</b> ${fmtD(end)} ${fmtT(end)} ${p.eventName?` · <i>${esc(p.eventName)}</i>`:""}
+  </div>
+  <div class="kpis">
+    <span class="k">Duración <b>${totalD.toFixed(1)} d · ${totalH.toFixed(0)} h</b></span>
+    <span class="k">Tareas <b>${(STATE.tasks||[]).length}</b></span>
+    <span class="k">Críticas <b>${(STATE.tasks||[]).filter(t=>t.critical).length}</b></span>
+    <span class="k">Hitos <b>${(STATE.milestones||[]).length+(STATE.tasks||[]).filter(t=>t.isMilestone).length}</b></span>
+    <span class="k">Recursos <b>${(STATE.resources||[]).length}</b></span>
+    <span class="k">Contactos <b>${(STATE.contacts||[]).length}</b></span>
+    <span class="k">Checklist <b>${(STATE.checklist||[]).filter(c=>c.done).length}/${(STATE.checklist||[]).length}</b></span>
+  </div>
+</div>
+<div class="section">
+<h2>Hitos</h2>
+${(()=>{
+  const NOMBRES_REDUNDANTES=/^(ingreso\s*predio|apertura\s*vip|apertura\s*puertas|ingreso|hito\s*final)$/i;
+  const hitosFiltrados=(STATE.milestones||[]).filter(m=>!NOMBRES_REDUNDANTES.test((m.name||"").trim()));
+  const taskHitos=(STATE.tasks||[]).filter(t=>t.isMilestone);
+  if(hitosFiltrados.length+taskHitos.length===0) return `<p class="empty">Sin hitos adicionales.</p>`;
+  return `<table><thead><tr><th>Hito</th><th style="width:25%">Fecha y hora</th></tr></thead><tbody>
+    ${hitosFiltrados.map(m=>{ const d=parseD(m.at); return `<tr><td>◆ ${esc(m.name)}</td><td style="font-family:ui-monospace,monospace">${fmtD(d)} ${fmtT(d)}</td></tr>`; }).join("")}
+    ${taskHitos.map(t=>{ const d=parseD(t.start); return `<tr><td>◆ ${esc(t.name)} <span class="pill info">tarea-hito ${esc(t.id)}</span></td><td style="font-family:ui-monospace,monospace">${fmtD(d)} ${fmtT(d)}</td></tr>`; }).join("")}
+  </tbody></table>`;
+})()}
+</div>
+<div class="section">
+<h2>Recursos disponibles</h2>
+${(STATE.resources||[]).length===0?`<p class="empty">Sin recursos.</p>`:`
+<table><thead><tr><th>Recurso</th><th style="width:15%">Capacidad</th><th style="width:25%">Ingreso</th></tr></thead><tbody>
+${(STATE.resources||[]).map(r=>{ const first=resourceFirstUse(r.name); const firstCell=first?`${fmtD(first)} ${fmtT(first)}`:`<span class="empty">— sin uso</span>`; return `<tr><td>${esc(r.name)}</td><td style="text-align:center"><b>${r.cap}</b></td><td style="font-family:ui-monospace,monospace;font-size:8.5pt">${firstCell}</td></tr>`; }).join("")}
+</tbody></table>`}
+</div>
+<div class="page-break"></div>
+<div class="section">
+<h2>Tareas del montaje</h2>
+${(STATE.tasks||[]).length===0?`<p class="empty">Sin tareas cargadas.</p>`:`
+<table><thead><tr>
+  <th style="width:8%">ID</th><th>Tarea</th><th style="width:15%">Inicio</th>
+  <th style="width:6%">Dur h</th><th style="width:22%">Recursos</th>
+  <th style="width:7%">Dep</th><th style="width:10%">Marcas</th><th style="width:10%">Estado</th>
+</tr></thead><tbody>
+${(STATE.tasks||[]).map(t=>{ const st=parseD(t.start); const cls=[]; if(t.critical) cls.push("crit"); if(t.status==="hecho") cls.push("done"); const resLabel=(t.res||[]).map(r=>`<span class="res-chip" style="background:${resColor(r.r)}">${esc(r.r.split(" ")[0])}×${r.n}</span>`).join(""); const marks=[]; if(t.critical) marks.push('<span class="pill crit">CRÍTICA</span>'); if(t.isMilestone) marks.push('<span class="pill warn">◆ HITO</span>'); return `<tr class="${cls.join(" ")}"><td><b>${esc(t.id)}</b></td><td>${esc(t.name)}</td><td style="font-family:ui-monospace,monospace;font-size:8.5pt">${fmtD(st)} ${fmtT(st)}</td><td style="text-align:center">${t.dur}</td><td>${resLabel}</td><td style="text-align:center">${t.dep?esc(t.dep):"—"}</td><td>${marks.join(" ")||"—"}</td><td>${statusPill(t.status)}</td></tr>`; }).join("")}
+</tbody></table>`}
+</div>
+<div class="section">
+<h2>Checklist T-minus al hito final</h2>
+${(STATE.checklist||[]).length===0?`<p class="empty">Sin ítems.</p>`:`
+<table><thead><tr><th style="width:7%">T−</th><th>Ítem</th><th style="width:22%">Fecha y hora</th><th style="width:6%">Hecho</th></tr></thead><tbody>
+${(STATE.checklist||[]).map(c=>{ const when=new Date(end.getTime()-c.tminus*3600000); return `<tr class="${c.done?'done':''}"><td><b>T−${c.tminus}h</b></td><td>${esc(c.txt)}</td><td style="font-family:ui-monospace,monospace">${fmtD(when)} ${fmtT(when)}</td><td style="text-align:center;font-size:12pt">${c.done?"✓":"☐"}</td></tr>`; }).join("")}
+</tbody></table>`}
+</div>
+<div class="section">
+<h2>Riesgos posibles + plan B</h2>
+${(STATE.risks||[]).length===0?`<p class="empty">Sin riesgos cargados.</p>`:`
+<table><thead><tr><th style="width:14%">Tipo</th><th style="width:36%">Riesgo</th><th>Plan B / Solución</th></tr></thead><tbody>
+${(STATE.risks||[]).map(r=>`<tr><td><b>${esc(r.tipo)}</b></td><td>${esc(r.titulo)}</td><td>${esc(r.sol)}</td></tr>`).join("")}
+</tbody></table>`}
+</div>
+<div class="section">
+<h2>Contactos clave</h2>
+${(STATE.contacts||[]).length===0?`<p class="empty">Sin contactos.</p>`:`
+<table><thead><tr><th style="width:13%">Rol</th><th style="width:28%">Nombre / empresa</th><th style="width:22%">Teléfono</th><th>Nota</th></tr></thead><tbody>
+${(STATE.contacts||[]).map(c=>`<tr><td><b>${esc(c.role)}</b></td><td>${esc(c.name)||'<span class="empty">—</span>'}</td><td style="font-family:ui-monospace,monospace">${esc(c.phone)||'<span class="empty">—</span>'}</td><td>${esc(c.note)||'<span class="empty">—</span>'}</td></tr>`).join("")}
+</tbody></table>`}
+</div>
+<div class="section">
+<h2>Datos del sitio</h2>
+${siteSorted.length===0?`<p class="empty">Sin datos cargados.</p>`:`
+<table><thead><tr><th style="width:18%">Categoría</th><th style="width:28%">Dato</th><th>Valor</th></tr></thead><tbody>
+${siteSorted.map(d=>{ const cat=SITE_CATS.find(c=>c.key===d.category)||SITE_CATS[SITE_CATS.length-1]; return `<tr><td><span class="cat-pill" style="background:${cat.color}22;color:${cat.color};border:1px solid ${cat.color}">${cat.label}</span></td><td>${esc(d.label)}</td><td>${esc(d.value)||'<span class="empty">—</span>'}</td></tr>`; }).join("")}
+</tbody></table>`}
+</div>
+<div class="page-footer">
+  <div class="foot-left">
+    <img src="${logoURL}" alt="ANIMAL" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block';">
+    <span class="logo" style="display:none">ANIMAL</span>
+  </div>
+  <div class="foot-right">
+    ${fmtD(new Date())} ${fmtT(new Date())} · Página <span class="page-num"></span> / <span class="page-total"></span>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+/* ============================================================
+   LOCK: doble-clic para editar
+   ============================================================ */
+function isLockable(el){
+  if(!el||!el.tagName) return false;
+  if(!["INPUT","SELECT","TEXTAREA"].includes(el.tagName)) return false;
+  const t=(el.type||"").toLowerCase();
+  if(["hidden","checkbox","radio","button","submit","file","color"].includes(t)) return false;
+  if(el.closest("header")) return false;
+  return true;
+}
+function applyLockToAll(){
+  const main=document.querySelector("main"); if(!main) return;
+  main.querySelectorAll("input, select, textarea").forEach(el=>{
+    if(!isLockable(el)) return;
+    if(el.classList.contains("locked")) return;
+    el.classList.add("locked");
+    if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"){ try{ el.readOnly=true; }catch(_){} }
+  });
+}
+["mousedown","click"].forEach(evt=>{
+  document.addEventListener(evt, e=>{
+    const el=e.target;
+    if(!isLockable(el)) return;
+    if(el.classList.contains("locked")){ e.preventDefault(); e.stopPropagation(); }
+  }, true);
+});
+document.addEventListener("dblclick", e=>{
+  const el=e.target;
+  if(!isLockable(el)) return;
+  if(!el.classList.contains("locked")) return;
+  e.preventDefault();
+  el.classList.remove("locked");
+  if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"){ try{ el.readOnly=false; }catch(_){} }
+  setTimeout(()=>{ try{ el.focus(); }catch(_){} if(el.showPicker){ try{ el.showPicker(); }catch(_){} } if(el.select){ try{ el.select(); }catch(_){} } },10);
+}, true);
+document.addEventListener("focusout", e=>{
+  const el=e.target;
+  if(!isLockable(el)) return;
+  if(el.classList.contains("locked")) return;
+  setTimeout(()=>{ if(!document.body.contains(el)) return; el.classList.add("locked"); if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"){ try{ el.readOnly=true; }catch(_){} } },60);
+}, true);
+
+/* ---- THEME TOGGLE ---- */
+function applyTheme(t){
+  const html=document.documentElement;
+  const b=document.getElementById("themeBtn");
+  if(t==="light"){ html.setAttribute("data-theme","light"); if(b) b.textContent="☀️"; }
+  else { html.removeAttribute("data-theme"); if(b) b.textContent="🌙"; }
+}
+function toggleTheme(){
+  const isLight=document.documentElement.getAttribute("data-theme")==="light";
+  const next=isLight?"dark":"light";
+  try{ localStorage.setItem("montajeTheme",next); }catch(e){}
+  applyTheme(next);
+  toast(next==="light"?"Tema claro":"Tema oscuro");
+}
+
+/* ============================================================
+   LISTENERS DE INPUTS (proyecto info)
+   ============================================================ */
+["projName","projLoc","dayStart","dayEnd","compressNight","hourGroup"].forEach(id=>{
+  const el=document.getElementById(id); if(!el) return;
+  el.addEventListener("change", e=>{
+    const map={projName:"name",projLoc:"location",dayStart:"dayStart",dayEnd:"dayEnd",compressNight:"compressNight",hourGroup:"hourGroup"};
+    const key=map[id];
+    const isBool=id==="compressNight";
+    const isNum=id==="hourGroup";
+    const isTime=(id==="dayStart"||id==="dayEnd");
+    let val;
+    if(isBool) val=e.target.checked;
+    else if(isNum) val=parseInt(e.target.value,10);
+    else if(isTime){ const norm=normalizeTime(e.target.value); if(norm===null){ toast("Hora inválida. Usá HH:MM (24h)"); e.target.value=STATE.project[key]||(id==="dayStart"?"07:00":"22:00"); return; } val=norm; }
+    else val=e.target.value;
+    STATE.project[key]=val;
+    save(); render();
+  });
+});
+function bindDTPair(prefix,projKey){
+  const dEl=document.getElementById(prefix+"Date");
+  const tEl=document.getElementById(prefix+"Time");
+  if(!dEl||!tEl) return;
+  const handler=()=>{
+    const d=dEl.value; const tRaw=tEl.value; const t=normalizeTime(tRaw);
+    if(t===null){ toast("Hora inválida. Usá HH:MM (24h)"); tEl.value=isoToTime(STATE.project[projKey]); return; }
+    if(!d) return;
+    STATE.project[projKey]=combineDT(d,t); save(); render();
+  };
+  dEl.addEventListener("change",handler);
+  tEl.addEventListener("change",handler);
+}
+bindDTPair("mStart","start");
+bindDTPair("mEnd","end");
+
+/* ---- Gantt drag listeners ---- */
+document.getElementById("gantt").addEventListener("pointerdown", onGanttPointerDown);
+document.addEventListener("pointermove", onGanttPointerMove);
+document.addEventListener("pointerup", onGanttPointerUp);
+document.addEventListener("pointercancel", onGanttPointerUp);
+
+/* ---- INIT ---- */
+applyTheme(localStorage.getItem("montajeTheme")||"dark");
+preloadLogo();
+// Iniciar: suscribir al índice y mostrar home
+attachIndexListener();
+// El spinner se oculta cuando llega el primer snapshot del índice
+// Si no hay proyectos aún, onSnapshot igual llega y oculta el spinner
+setTimeout(()=>{
+  const spinner=document.getElementById("fbSpinner");
+  if(spinner&&!spinner.classList.contains("hidden")){ spinner.classList.add("hidden"); showHome(); }
+}, 2000);
+
+/* ---- RECUPERACIÓN LUCCIANOS AL RIO ---- */
+function recoverLuccianos(){
+  if(!CURRENT_PROJECT_ID){ toast("Abrí el proyecto LUCCIANOS AL RIO primero"); return; }
+  if(!confirm("¿Restaurar las tareas del backup de LUCCIANOS AL RIO? Esto sobreescribirá el contenido actual.")) return;
+  const recovered = {"contacts": [{"note": "", "phone": "", "name": "", "role": "Predio"}, {"phone": "", "note": "", "name": "", "role": "Cliente"}, {"phone": "", "note": "", "name": "", "role": "Flete"}, {"name": "Colapinto (team)", "role": "Talento", "phone": "", "note": "canalizar por manager"}, {"name": "", "role": "Gráfica", "phone": "", "note": ""}, {"name": "", "role": "AV", "note": "", "phone": ""}, {"note": "24/7 predio", "phone": "", "name": "", "role": "Seguridad"}], "milestones": [], "meetingItems": [], "resources": [{"cap": 1, "color": "#5734d5", "name": "Javier Comercial"}, {"cap": 1, "name": "Nicolas Producción ", "color": "#64dd8f"}, {"cap": 1, "color": "#e5a315", "name": "Juan Presupuesto"}, {"color": "#8c3bde", "name": "Carolina Proyectista ", "cap": 1}, {"name": "Agustín Proyectista ", "color": "#2fca4e", "cap": 1}, {"color": "#94109e", "name": "Victoria Proyectista ", "cap": 1}, {"color": "#0a55bd", "name": "Silvio Proyectista", "cap": 1}, {"cap": 1, "color": "#f7ef08", "name": "Ignacio Proyectista "}, {"cap": 1, "color": "#ec2222", "name": "Ginette DG"}, {"color": "#34d399", "name": "Jefe Montaje", "cap": 1}, {"name": "Cuadrilla Estructura", "color": "#fb6060", "cap": 4}, {"cap": 1, "color": "#fbbf24", "name": "Electricista"}, {"cap": 1, "color": "#60a5fa", "name": "Tecnología"}, {"name": "Ploter / Gráfica", "color": "#89fbc9", "cap": 2}, {"cap": 1, "name": "Mobiliario", "color": "#c084fc"}, {"cap": 3, "name": "Cuadrilla Terminaciones  ", "color": "#d23cfb"}, {"color": "#f50000", "name": "Cliente", "cap": 0}, {"cap": 1, "name": "Brenda Administración ", "color": "#e462a1"}, {"cap": 1, "color": "#7f3281", "name": "Valeria Administración "}], "projectType": "permanentes", "tasks": [{"critical": false, "status": "pendiente", "_ganttSubOpen": true, "start": "2026-06-02T08:00", "_subOpen": false, "dur": 6.7, "dep": "M02", "proveedor": "", "id": "M03", "isMilestone": true, "durUnit": "d", "subtasks": [{"isMilestone": false, "done": false, "durUnit": "d", "status": "pendiente", "name": "Demolicion de piso", "res": [], "start": "2026-06-03T00:00", "dur": 4, "dep": null, "proveedor": "Walter", "id": "S1", "critical": false, "children": []}, {"status": "pendiente", "start": "2026-06-02T08:00", "_childOpen": true, "children": [], "critical": false, "isMilestone": false, "durUnit": "d", "done": false, "name": "Desmonte general de instalaciones ", "res": [], "dur": 1, "dep": null, "proveedor": "Walter", "id": "S2"}, {"dur": 1, "dep": null, "proveedor": "Walter", "id": "S3", "isMilestone": false, "durUnit": "d", "done": false, "name": "Cerco de obra", "res": [], "children": [], "_childOpen": false, "critical": false, "status": "pendiente", "start": "2026-06-02T08:00"}, {"id": "S4", "critical": false, "proveedor": "", "dep": null, "dur": 1, "start": "2026-06-02T08:00", "res": [], "name": "", "status": "pendiente", "isMilestone": false, "done": false, "durUnit": "d", "children": []}], "done": false, "name": "DEMOLICION Y TRABAJOS PREELIMINARES", "res": []}, {"critical": false, "start": "2026-06-02T08:00", "_ganttSubOpen": true, "status": "pendiente", "id": "M22", "proveedor": "", "dep": null, "dur": 20, "_subOpen": false, "res": [], "name": "OBRA CIVIL", "done": false, "durUnit": "d", "subtasks": [{"dep": null, "dur": 6, "critical": false, "id": "S1", "proveedor": "Walter", "name": "Colocacion Porcelanato", "status": "pendiente", "isMilestone": false, "done": false, "durUnit": "d", "start": "2026-06-05T08:00", "res": [], "children": []}], "isMilestone": false}, {"res": [], "name": "INSTALACIONES", "isMilestone": false, "subtasks": [], "durUnit": "d", "done": false, "id": "M22_1", "proveedor": "", "dep": null, "dur": 45, "start": "", "status": "pendiente", "critical": false}, {"status": "pendiente", "start": "", "critical": false, "name": "REVESTIMIENTOS / ACABADOS / ESCENOGRAFIA", "durUnit": "d", "subtasks": [], "done": false, "isMilestone": false, "res": [], "dep": null, "dur": 15, "id": "M23", "proveedor": ""}, {"critical": false, "status": "pendiente", "start": "", "dep": null, "dur": 1, "id": "M24", "proveedor": "", "name": "MOBILIARIO & CARPINTERIA", "isMilestone": false, "durUnit": "d", "done": false, "subtasks": [], "res": []}, {"status": "pendiente", "start": "", "critical": false, "durUnit": "h", "done": false, "subtasks": [], "isMilestone": false, "name": "EQUIPAMIENTO TECNICO", "res": [], "dur": 1, "dep": null, "proveedor": "", "id": "M19"}, {"proveedor": "", "id": "M21", "dur": 1, "dep": null, "res": [], "isMilestone": false, "durUnit": "h", "done": false, "subtasks": [], "name": "GRAFICA / CARTELERIA", "critical": false, "start": "", "status": "pendiente"}, {"dur": 1, "dep": "M03", "proveedor": "", "id": "M04", "done": false, "durUnit": "h", "subtasks": [], "isMilestone": false, "name": "Cerco de obra y protecciones", "res": [], "critical": false, "status": "pendiente", "start": "2026-05-19T16:15"}, {"name": "Relevamiento general y repelanteo", "subtasks": [], "durUnit": "h", "done": false, "isMilestone": false, "res": [], "dep": null, "dur": 1, "id": "M01", "proveedor": "", "status": "pendiente", "start": "2026-05-18T10:00", "critical": false}, {"isMilestone": false, "done": false, "durUnit": "h", "subtasks": [], "name": "Albañilería general", "res": [], "dur": 1, "dep": "M04", "proveedor": "", "id": "M05", "status": "pendiente", "start": "2026-05-20T13:30", "critical": false}, {"critical": false, "start": "2026-05-21T10:00", "status": "pendiente", "proveedor": "", "id": "M07", "dur": 1, "dep": "M06", "res": [], "isMilestone": false, "subtasks": [], "durUnit": "h", "done": false, "name": "Nivelación y carpetas"}, {"id": "M11", "proveedor": "", "dep": "M06", "dur": 1, "res": [], "name": "Colocación de porcelanatos", "durUnit": "h", "done": false, "subtasks": [], "isMilestone": false, "critical": false, "start": "2026-05-21T11:45", "status": "pendiente"}, {"critical": false, "status": "pendiente", "start": "2026-05-21T10:00", "dep": "M05", "dur": 1, "id": "M06", "proveedor": "", "name": "Durlock", "durUnit": "h", "done": false, "subtasks": [], "isMilestone": true, "res": []}, {"res": [], "name": "Cielorrasos", "isMilestone": false, "done": false, "durUnit": "h", "subtasks": [], "id": "M08", "proveedor": "", "dep": "M07", "dur": 1, "start": "2026-05-22T10:00", "status": "pendiente", "critical": false}, {"critical": false, "status": "pendiente", "start": "2026-05-23T10:00", "dep": "M08", "dur": 1, "id": "M09", "proveedor": "", "name": "Instalación Electrica", "isMilestone": false, "done": false, "durUnit": "h", "subtasks": [], "res": []}, {"dur": 1, "dep": "M09", "proveedor": "", "id": "M10", "isMilestone": false, "durUnit": "h", "subtasks": [], "done": false, "name": "Instalación Sanitaria ", "res": [], "critical": false, "status": "pendiente", "start": "2026-05-25T10:00"}, {"status": "pendiente", "start": "2026-05-21T10:00", "critical": false, "name": "Instalación de Incendio", "subtasks": [], "done": false, "durUnit": "h", "isMilestone": false, "res": [], "dep": null, "dur": 1, "id": "M12", "proveedor": ""}, {"proveedor": "", "id": "M13", "dur": 1, "dep": null, "res": [], "isMilestone": true, "subtasks": [], "done": false, "durUnit": "h", "name": "Instalación Termomecánica", "critical": true, "start": "2026-05-21T14:00", "status": "pendiente"}, {"critical": false, "status": "pendiente", "start": "2026-05-21T15:00", "dur": 1, "dep": null, "proveedor": "", "id": "M14", "isMilestone": false, "subtasks": [], "done": false, "durUnit": "h", "name": "Revestimiento Interior", "res": []}, {"isMilestone": false, "durUnit": "h", "subtasks": [], "done": false, "name": "Revestimiento Cogobos", "res": [], "dur": 1, "dep": null, "proveedor": "", "id": "M15", "status": "pendiente", "start": "2026-05-21T16:00", "critical": false}, {"status": "pendiente", "start": "", "critical": true, "isMilestone": true, "done": false, "subtasks": [], "durUnit": "h", "name": "Mobiliario fijo ", "res": [], "dur": 1, "dep": null, "proveedor": "", "id": "M16"}, {"dep": null, "dur": 1, "id": "M17", "proveedor": "", "name": "Carpintería ", "done": false, "subtasks": [], "durUnit": "h", "isMilestone": false, "res": [], "critical": false, "status": "pendiente", "start": ""}, {"start": "", "status": "pendiente", "critical": false, "res": [], "name": "Mesadas", "isMilestone": false, "durUnit": "h", "subtasks": [], "done": false, "id": "M18", "proveedor": "", "dep": "M16", "dur": 1}], "siteData": [{"category": "predio", "value": "", "label": "Dirección"}, {"value": "", "category": "predio", "label": "Altura máxima"}, {"value": "", "category": "electrico", "label": "kW disponibles"}, {"label": "Tipo de toma / tablero", "category": "electrico", "value": ""}, {"category": "logistica", "value": "", "label": "Horario ingreso camión"}, {"category": "logistica", "value": "", "label": "Ventana desmontaje"}, {"label": "Lista operarios acreditados", "category": "accesos", "value": ""}, {"label": "WiFi del predio", "category": "accesos", "value": ""}], "checklist": [{"done": false, "txt": "Eléctrico troncal funcionando", "tminus": 30}, {"tminus": 29, "txt": "Gráfica ", "done": false}, {"done": false, "txt": "Técnica en funcionamiento", "tminus": 28}, {"tminus": 24, "txt": "Mobiliario en su lugar", "done": false}, {"tminus": 20, "txt": "Limpieza profunda hecha", "done": false}, {"done": false, "txt": "Walkthrough cliente firmado", "tminus": 19}], "project": {"dayEnd": "20:00", "compressNight": true, "location": "Complejo al Rio", "hiddenResources": [], "end": "2026-08-04T18:00", "hourGroup": 1, "name": "LUCCIANOS AL RIO", "eventName": "Apertura puertas VIP", "dayStart": "10:00", "start": "2026-06-02T10:00"}, "risks": []};
+  // Preservar projectType
+  recovered.projectType = "permanentes";
+  STATE = Object.assign({}, STATE, recovered);
+  save(); syncInputs(); render();
+  toast("✅ Proyecto recuperado — " + STATE.tasks.length + " tareas restauradas");
+}
+
+
+showHome();
+
+</script>
+</body>
+</html>
