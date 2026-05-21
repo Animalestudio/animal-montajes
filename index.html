@@ -284,8 +284,10 @@ button.crit-btn:active{transform:scale(0.94)}
 .gantt-grid .bar .handle-l{left:0}.gantt-grid .bar .handle-r{right:0}
 .gantt-grid .bar:hover .handle{background:rgba(0,0,0,.3)}
 .gantt-grid .bar.sub-gantt-bar{top:3px;height:20px;font-size:10.5px;font-weight:600;border-radius:3px;color:var(--ink);text-shadow:none;box-shadow:none}
-.gantt-grid .bar.sub-gantt-bar .handle{background:rgba(0,0,0,.12)}
-.gantt-grid .bar.sub-gantt-bar:hover .handle{background:rgba(0,0,0,.3)}
+.gantt-grid .bar.sub-gantt-bar .handle{background:rgba(0,0,0,.2);width:10px}
+.gantt-grid .bar.sub-gantt-bar:hover .handle{background:rgba(0,0,0,.45);cursor:ew-resize}
+.gantt-grid .bar.sub2-gantt-bar .handle{background:rgba(0,0,0,.15);width:8px}
+.gantt-grid .bar.sub2-gantt-bar:hover .handle{background:rgba(0,0,0,.4);cursor:ew-resize}
 .gantt-grid .milestone{
   position:absolute;top:4px;
   font-size:10px;color:var(--accent);white-space:nowrap;
@@ -2064,14 +2066,16 @@ function renderGantt(){
           <span class="gl-id" style="font-size:9px">${esc(c.id||"C"+(ci+1))}</span>
         </div>`;
 
-        // Bar: sub-sub (sin handles — solo visual)
+        // Bar: sub-sub — con handles para resize
         const cp=barPos(cst,cen);
         const cBg=hexAlpha(bg,.12);
         const cCls=["bar","sub2-gantt-bar",c.done?"done":""].filter(Boolean).join(" ");
         const cTip=`↳↳ ${c.name}\n${fmtD(cst)} → ${fmtD(cen)}`;
         B+=`<div class="gg-row gg-sub2" style="min-height:${SUB2_H}px;width:${totalW}px">${cells(SUB2_H)}`;
         B+=`<div class="${cCls}" data-tid="${esc(t.id)}" data-sid="${si}" data-cid="${ci}" style="left:${cp.left}px;width:${cp.width}px;background:${cBg};border:1px dotted ${bg};color:var(--ink)" title="${esc(cTip)}">`;
+        B+=`<div class="handle handle-l" data-handle="l"></div>`;
         B+=`<span style="padding:0 8px;overflow:hidden;flex:1;font-size:9.5px">${esc(c.name||"—")}${c.proveedor?` <span style="opacity:.5;font-size:9px">· ${esc(c.proveedor)}</span>`:""}</span>`;
+        B+=`<div class="handle handle-r" data-handle="r"></div>`;
         B+=`</div></div>`;
       });
     });
@@ -2944,41 +2948,52 @@ function onGanttPointerDown(e){
   const bar=e.target.closest(".bar"); if(!bar) return;
   e.preventDefault();
 
-  // ¿Es subtarea?
-  const sid = bar.dataset.sid;
   const tid = bar.dataset.tid;
+  const sid = bar.dataset.sid;
+  const cid = bar.dataset.cid; // sub-subtarea nivel 3
 
-  if(sid !== undefined && tid){
-    // Subtarea
-    const t    = STATE.tasks.find(x=>x.id===tid); if(!t) return;
-    const si   = parseInt(sid,10);
-    const s    = t.subtasks[si]; if(!s) return;
-    let mode   = "move";
-    const handle = e.target.closest(".handle");
-    if(handle) mode = handle.dataset.handle==="l"?"left":"right";
+  const handle = e.target.closest(".handle");
+  const mode   = handle ? (handle.dataset.handle==="l"?"left":"right") : "move";
+
+  if(cid !== undefined && sid !== undefined && tid){
+    // ── Sub-subtarea (nivel 3) ──
+    const t = STATE.tasks.find(x=>x.id===tid); if(!t) return;
+    const si = parseInt(sid,10), ci = parseInt(cid,10);
+    const s = t.subtasks?.[si]; if(!s) return;
+    const c = s.children?.[ci]; if(!c) return;
+    dragState = {
+      isL3:true, tid, si, ci, mode, bar,
+      startX:e.clientX,
+      origLeft:parseFloat(bar.style.left)||0,
+      origWidth:parseFloat(bar.style.width)||0,
+      origStart:parseD(c.start).getTime(),
+      origDur:c.dur, origDurUnit:c.durUnit||"d",
+      moved:false
+    };
+  } else if(sid !== undefined && tid){
+    // ── Subtarea (nivel 2) ──
+    const t = STATE.tasks.find(x=>x.id===tid); if(!t) return;
+    const si = parseInt(sid,10);
+    const s  = t.subtasks[si]; if(!s) return;
     dragState = {
       isSub:true, tid, si, mode, bar,
       startX:e.clientX,
       origLeft:parseFloat(bar.style.left)||0,
       origWidth:parseFloat(bar.style.width)||0,
       origStart:parseD(s.start).getTime(),
-      origDur: s.dur,
-      origDurUnit: s.durUnit||"h",
+      origDur: s.dur, origDurUnit: s.durUnit||"d",
       moved:false
     };
   } else if(tid){
-    // Tarea principal
+    // ── Tarea principal ──
     const t=STATE.tasks.find(x=>x.id===tid); if(!t) return;
-    let mode="move";
-    const handle=e.target.closest(".handle");
-    if(handle) mode=handle.dataset.handle==="l"?"left":"right";
     dragState={
       isSub:false, tid, mode, bar,
       startX:e.clientX,
       origLeft:parseFloat(bar.style.left)||0,
       origWidth:parseFloat(bar.style.width)||0,
       origStart:parseD(t.start).getTime(),
-      origDur:t.dur,
+      origDur:t.dur, origDurUnit:t.durUnit||"d",
       moved:false
     };
   } else return;
@@ -3019,7 +3034,36 @@ function onGanttPointerUp(e){
     const newStartIdx = Math.round(newLeftPx / SLOT_PX);
     const newEndIdx   = Math.round((newLeftPx + newWidthPx) / SLOT_PX);
 
-    if(dragState.isSub){
+    if(dragState.isL3){
+      // ── Sub-subtarea (nivel 3) ──
+      const t = STATE.tasks.find(x=>x.id===dragState.tid);
+      const s = t?.subtasks?.[dragState.si];
+      const c = s?.children?.[dragState.ci];
+      if(t && s && c){
+        let newStart, newDurH;
+        if(dragState.mode==="move"){
+          const ns=visIdxToTime(newStartIdx);
+          if(!ns){ bar.classList.remove("dragging"); dragState=null; return; }
+          newStart=ns.getTime(); newDurH=durToHours(c);
+        } else if(dragState.mode==="right"){
+          const ne=visIdxToTime(newEndIdx);
+          if(!ne){ bar.classList.remove("dragging"); dragState=null; return; }
+          newStart=parseD(c.start).getTime();
+          newDurH=Math.max(1,(ne.getTime()-newStart)/3600000);
+        } else {
+          const ns=visIdxToTime(newStartIdx);
+          if(!ns){ bar.classList.remove("dragging"); dragState=null; return; }
+          newStart=ns.getTime();
+          const origEndMs=dragState.origStart+durToHours({dur:dragState.origDur,durUnit:dragState.origDurUnit})*3600000;
+          newDurH=(origEndMs-newStart)/3600000;
+          if(newDurH<1){ bar.classList.remove("dragging"); dragState=null; render(); return; }
+        }
+        c.start=toLocalISO(new Date(newStart));
+        if(c.durUnit==="d") c.dur=Math.max(1,Math.round(newDurH/24));
+        else                 c.dur=Math.max(0.25,Math.round(newDurH*100)/100);
+        save(); render();
+      }
+    } else if(dragState.isSub){
       // ── Subtarea ──
       const t  = STATE.tasks.find(x=>x.id===dragState.tid);
       const s  = t?.subtasks?.[dragState.si];
