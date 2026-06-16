@@ -544,6 +544,7 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
         <input type="text" id="mEndTime" placeholder="HH:MM" maxlength="5" pattern="\d{1,2}:\d{2}" style="width:70px;font-family:ui-monospace,monospace;text-align:center" title="Formato 24 h: HH:MM">
       </label>
       <button class="ghost" onclick="fitTasksToProject()" title="Desplaza todas las tareas para que arranquen en 'Ingreso predio' manteniendo sus duraciones">⇤ Ajustar tareas al evento</button>
+      <button class="ghost" onclick="shiftAllTasksDays()" title="Desplaza todas las tareas y fechas del proyecto N días" style="border-color:var(--warn);color:var(--warn)">📅 Desplazar todo N días</button>
     </div>
     <div class="toolbar">
       <label><b>Jornada (modo hora):</b> se configura en el panel Gantt al activar vista por hora.</label>
@@ -2744,6 +2745,35 @@ function fitTasksToProject(){
   const dirMsg=offsetMs>0?`adelantadas ${(offsetMs/3600000).toFixed(1)}h`:`atrasadas ${(-offsetMs/3600000).toFixed(1)}h`;
   if(overflowing>0){ const overH=Math.ceil((maxEnd-projEndMs)/3600000); toast(`Tareas ${dirMsg} · ⚠ ${overflowing} tarea(s) exceden el hito final por ${overH}h`); }
   else { toast(`Tareas ${dirMsg} · todo encaja en la ventana del evento`); }
+}
+function shiftAllTasksDays(){
+  if(!STATE.tasks.length){ toast("No hay tareas para desplazar"); return; }
+  const input = prompt("¿Cuántos días querés desplazar?\n\nPositivo = adelantar · Negativo = atrasar\nEjemplo: 7 adelanta una semana, -3 atrasa 3 días", "7");
+  if(input === null) return;
+  const days = parseFloat(input.replace(",","."));
+  if(isNaN(days) || days === 0){ toast("Valor inválido o cero — operación cancelada"); return; }
+  const msPerDay = 86400000;
+  const offsetMs = days * msPerDay;
+  // Desplazar tareas (y sus subtareas y sub-subtareas)
+  STATE.tasks.forEach(t => {
+    if(t.start){ t.start = toLocalISO(new Date(parseD(t.start).getTime() + offsetMs)); }
+    (t.subtasks||[]).forEach(s => {
+      if(s.start){ s.start = toLocalISO(new Date(parseD(s.start).getTime() + offsetMs)); }
+      (s.children||[]).forEach(c => {
+        if(c.start){ c.start = toLocalISO(new Date(parseD(c.start).getTime() + offsetMs)); }
+      });
+    });
+  });
+  // Desplazar también hitos manuales
+  (STATE.milestones||[]).forEach(m => {
+    if(m.at){ m.at = toLocalISO(new Date(parseD(m.at).getTime() + offsetMs)); }
+  });
+  // Desplazar fechas del proyecto (ingreso y hito final)
+  if(STATE.project.start){ STATE.project.start = toLocalISO(new Date(parseD(STATE.project.start).getTime() + offsetMs)); }
+  if(STATE.project.end)  { STATE.project.end   = toLocalISO(new Date(parseD(STATE.project.end).getTime()   + offsetMs)); }
+  syncInputs(); save(); render();
+  const dir = days > 0 ? `adelantado ${days} día(s)` : `atrasado ${Math.abs(days)} día(s)`;
+  toast("📅 Todo " + dir + " — guardado");
 }
 function setJornada24(){ STATE.project.dayStart="00:00"; STATE.project.dayEnd="23:59"; syncInputs(); save(); render(); }
 function setJornadaDefault(){ STATE.project.dayStart="07:00"; STATE.project.dayEnd="22:00"; syncInputs(); save(); render(); }
