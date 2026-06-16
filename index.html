@@ -412,6 +412,24 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
 .hr{height:1px;background:var(--line);margin:10px 0}
 .countdown{font-family:ui-monospace,monospace;font-size:18px;font-weight:700;color:var(--accent);text-align:right}
 .countdown small{display:block;font-size:9px;color:var(--muted);font-weight:400;text-transform:uppercase;margin-top:2px}
+
+/* ── VIEW-ONLY / CLIENTE MODE ── */
+body.view-only .top-actions button:not(#themeBtn){ display:none!important }
+body.view-only #btnExpandAll,body.view-only #btnCollapseAll,body.view-only #btnPDF,body.view-only #btnSave{ display:none!important }
+body.view-only button.add,body.view-only button.del,body.view-only button.hito-btn,body.view-only button.crit-btn{ display:none!important }
+body.view-only .drag-handle,body.view-only .move-btn{ display:none!important }
+body.view-only .home-toolbar,body.view-only .home-intro{ display:none!important }
+body.view-only input{ pointer-events:none!important;border-color:transparent!important;background:transparent!important }
+body.view-only select{ pointer-events:none!important;border-color:transparent!important;background:transparent!important;appearance:none!important;-webkit-appearance:none!important }
+body.view-only textarea{ pointer-events:none!important;border-color:transparent!important;background:transparent!important;resize:none!important }
+body.view-only .task-res-editor button{ display:none!important }
+body.view-only .sub-arrow{ pointer-events:none }
+body.view-only .subtask-panel button{ display:none!important }
+body.view-only #sec-ficha .toolbar button{ display:none!important }
+body.view-only details:not(#sec-gantt):not(#sec-tasks){ display:none!important }
+.view-only-banner{ background:linear-gradient(90deg,#0f172a,#1e3a5f);color:#93c5fd;padding:7px 20px;font-size:11.5px;font-weight:700;letter-spacing:.5px;text-align:center;border-bottom:2px solid #3b82f6;display:none }
+body.view-only .view-only-banner{ display:block }
+
 .toast{position:fixed;bottom:20px;right:20px;background:var(--ok);color:#111;padding:10px 16px;border-radius:6px;font-weight:600;font-size:12px;z-index:99}
 
 /* HOME VIEW */
@@ -467,6 +485,7 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
 </head>
 <body>
 
+<div class="view-only-banner">👁 VISTA DE CLIENTE · Solo lectura · los cambios están deshabilitados</div>
 <!-- Spinner de carga Firebase -->
 <div id="fbSpinner">
   <div class="spinner-box">
@@ -500,6 +519,8 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
       <button class="ghost" id="btnExpandAll" onclick="expandAll()" title="Abrir todas las secciones" style="padding:6px 10px;font-size:14px;display:none">▼</button>
       <button class="ghost" id="btnCollapseAll" onclick="collapseAll()" title="Cerrar todas las secciones" style="padding:6px 10px;font-size:14px;display:none">▲</button>
       <button class="ghost" id="btnPDF" onclick="exportPDF()" title="Generar resumen imprimible / PDF" style="display:none">📄 PDF</button>
+      <button class="ghost" id="btnGanttPDF" onclick="exportGanttPDF()" title="Exportar visualización del Gantt como PDF" style="display:none;border-color:#60a5fa;color:#60a5fa">📊 Gantt PDF</button>
+      <button class="ghost" id="btnShareView" onclick="shareClientView()" title="Copiar link de solo lectura para el cliente" style="display:none;border-color:#36d399;color:#36d399">🔗 Compartir vista</button>
     </div>
   </div>
 </header>
@@ -520,7 +541,7 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
 <!-- MONTAJE VIEW (oculto por default) -->
 <div id="viewMontaje" style="display:none">
 
-<details open>
+<details open id="sec-ficha">
   <summary><span class="sum-title">① Ficha / info general</span></summary>
   <div class="body">
     <div class="toolbar">
@@ -553,7 +574,7 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
   </div>
 </details>
 
-<details open>
+<details open id="sec-gantt">
   <summary><span class="sum-title">② Gantt <small id="gInfo"></small></span></summary>
   <div class="body">
     <div class="toolbar" style="margin-bottom:8px">
@@ -595,7 +616,7 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
   </div>
 </details>
 
-<details open>
+<details open id="sec-tasks">
   <summary><span class="sum-title">④ Tareas <small id="tCount"></small></span></summary>
   <div class="body">
     <table id="tasksTable"></table>
@@ -733,6 +754,13 @@ tbody tr.drag-over-bottom{box-shadow:inset 0 -3px 0 0 var(--accent)}
    Las encontrás en:
    Firebase Console → tu proyecto → ⚙️ Configuración → Tus apps → SDK snippet (Config)
    ============================================================ */
+
+/* ── VIEW-ONLY MODE ── */
+const _urlParams   = new URLSearchParams(window.location.search);
+const VIEW_ONLY    = _urlParams.get('ver') === '1';
+const VIEW_PROJ_ID = _urlParams.get('p') || null;
+if(VIEW_ONLY) document.body.classList.add('view-only');
+
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyCkFaMIq7bULbsMsEZRYv_-ycfBHkqCKwk",
   authDomain:        "animal---montaje.firebaseapp.com",
@@ -990,7 +1018,9 @@ function attachIndexListener(){
       setSyncDot("ok");
       document.getElementById("fbSpinner").classList.add("hidden");
       // Si estamos en home, refrescar la grilla
-      if(document.getElementById("viewHome").style.display !== "none"){
+      if(VIEW_ONLY && VIEW_PROJ_ID){
+        openProject(VIEW_PROJ_ID);
+      } else if(document.getElementById("viewHome").style.display !== "none"){
         renderHome();
       }
     }, err => {
@@ -1280,6 +1310,7 @@ function showMontaje(){
   document.getElementById("btnExpandAll").style.display = "inline-flex";
   document.getElementById("btnCollapseAll").style.display="inline-flex";
   document.getElementById("btnPDF").style.display       = "inline-flex";
+  if(!VIEW_ONLY){ document.getElementById("btnGanttPDF").style.display="inline-flex"; document.getElementById("btnShareView").style.display="inline-flex"; }
   syncInputs();
   render();
 }
@@ -2746,35 +2777,175 @@ function fitTasksToProject(){
   if(overflowing>0){ const overH=Math.ceil((maxEnd-projEndMs)/3600000); toast(`Tareas ${dirMsg} · ⚠ ${overflowing} tarea(s) exceden el hito final por ${overH}h`); }
   else { toast(`Tareas ${dirMsg} · todo encaja en la ventana del evento`); }
 }
+
+/* ── DESPLAZAR TODO N DÍAS ── */
 function shiftAllTasksDays(){
   if(!STATE.tasks.length){ toast("No hay tareas para desplazar"); return; }
-  const input = prompt("¿Cuántos días querés desplazar?\n\nPositivo = adelantar · Negativo = atrasar\nEjemplo: 7 adelanta una semana, -3 atrasa 3 días", "7");
-  if(input === null) return;
-  const days = parseFloat(input.replace(",","."));
-  if(isNaN(days) || days === 0){ toast("Valor inválido o cero — operación cancelada"); return; }
-  const msPerDay = 86400000;
-  const offsetMs = days * msPerDay;
-  // Desplazar tareas (y sus subtareas y sub-subtareas)
-  STATE.tasks.forEach(t => {
-    if(t.start){ t.start = toLocalISO(new Date(parseD(t.start).getTime() + offsetMs)); }
-    (t.subtasks||[]).forEach(s => {
-      if(s.start){ s.start = toLocalISO(new Date(parseD(s.start).getTime() + offsetMs)); }
-      (s.children||[]).forEach(c => {
-        if(c.start){ c.start = toLocalISO(new Date(parseD(c.start).getTime() + offsetMs)); }
-      });
+  const input=prompt("¿Cuántos días querés desplazar?\n\nPositivo = adelantar · Negativo = atrasar\nEjemplo: 7 adelanta una semana, -3 atrasa 3 días","7");
+  if(input===null) return;
+  const days=parseFloat(input.replace(",","."));
+  if(isNaN(days)||days===0){ toast("Valor inválido o cero — cancelado"); return; }
+  const offsetMs=days*86400000;
+  STATE.tasks.forEach(t=>{
+    if(t.start) t.start=toLocalISO(new Date(parseD(t.start).getTime()+offsetMs));
+    (t.subtasks||[]).forEach(s=>{
+      if(s.start) s.start=toLocalISO(new Date(parseD(s.start).getTime()+offsetMs));
+      (s.children||[]).forEach(c=>{ if(c.start) c.start=toLocalISO(new Date(parseD(c.start).getTime()+offsetMs)); });
     });
   });
-  // Desplazar también hitos manuales
-  (STATE.milestones||[]).forEach(m => {
-    if(m.at){ m.at = toLocalISO(new Date(parseD(m.at).getTime() + offsetMs)); }
-  });
-  // Desplazar fechas del proyecto (ingreso y hito final)
-  if(STATE.project.start){ STATE.project.start = toLocalISO(new Date(parseD(STATE.project.start).getTime() + offsetMs)); }
-  if(STATE.project.end)  { STATE.project.end   = toLocalISO(new Date(parseD(STATE.project.end).getTime()   + offsetMs)); }
+  (STATE.milestones||[]).forEach(m=>{ if(m.at) m.at=toLocalISO(new Date(parseD(m.at).getTime()+offsetMs)); });
+  if(STATE.project.start) STATE.project.start=toLocalISO(new Date(parseD(STATE.project.start).getTime()+offsetMs));
+  if(STATE.project.end)   STATE.project.end  =toLocalISO(new Date(parseD(STATE.project.end).getTime()+offsetMs));
   syncInputs(); save(); render();
-  const dir = days > 0 ? `adelantado ${days} día(s)` : `atrasado ${Math.abs(days)} día(s)`;
-  toast("📅 Todo " + dir + " — guardado");
+  toast("📅 Todo "+(days>0?`adelantado ${days} día(s)`:`atrasado ${Math.abs(days)} día(s)`)+" — guardado");
 }
+
+/* ── COMPARTIR VISTA DE CLIENTE ── */
+function shareClientView(){
+  if(!CURRENT_PROJECT_ID){ toast("Abrí un proyecto primero"); return; }
+  const url=`${location.origin}${location.pathname}?ver=1&p=${CURRENT_PROJECT_ID}`;
+  navigator.clipboard.writeText(url).then(()=>{ toast("🔗 Link copiado al portapapeles"); })
+    .catch(()=>{ prompt("Copiá este link para compartir con tu cliente:",url); });
+}
+
+/* ── EXPORTAR GANTT PDF ── */
+function exportGanttPDF(){
+  const html=buildGanttPrintHTML();
+  const w=window.open("","_blank");
+  if(!w){ alert("El navegador bloqueó la ventana emergente.\nPermitila y volvé a clickear."); return; }
+  w.document.open(); w.document.write(html); w.document.close(); w.focus();
+  setTimeout(()=>{ try{ w.print(); }catch(_){} },600);
+}
+
+function buildGanttPrintHTML(){
+  const p=STATE.project;
+  const tasks=(STATE.tasks||[]).filter(t=>t.start);
+  if(!tasks.length) return "<html><body><p>Sin tareas con fecha.</p></body></html>";
+  let minMs=Infinity,maxMs=-Infinity;
+  tasks.forEach(t=>{
+    const s=parseD(t.start).getTime(); if(isFinite(s)&&s<minMs) minMs=s;
+    const e=s+durToHours(t)*3600000; if(isFinite(e)&&e>maxMs) maxMs=e;
+  });
+  const rangeMs=maxMs-minMs;
+  const rangeDays=rangeMs/86400000;
+  const useHours=rangeDays<=4;
+  const unitMs=useHours?3600000:86400000;
+  const slotCount=Math.ceil(rangeMs/unitMs)+1;
+  const PALETTE=["#4f86c6","#5ba08a","#8b7fc7","#c47a5a","#4fa8a8","#b07cbf","#7a9e5f","#c4855a","#5a8fc4","#a07c5a","#5aab7a","#9a6faf"];
+  const tColor=idx=>PALETTE[idx%PALETTE.length];
+
+  let headerSlots="";
+  if(useHours){
+    let dayGroups=[];
+    for(let i=0;i<slotCount;i++){
+      const d=new Date(minMs+i*unitMs);
+      const dk=d.toLocaleDateString("es-AR",{weekday:"short",day:"2-digit",month:"2-digit"});
+      if(!dayGroups.length||dayGroups[dayGroups.length-1].label!==dk) dayGroups.push({label:dk,count:0});
+      dayGroups[dayGroups.length-1].count++;
+    }
+    headerSlots+=`<tr><th style="width:200px;min-width:160px;background:#1e222b;color:#8a93a6;font-size:9pt;padding:4pt 6pt">Tarea</th>`;
+    dayGroups.forEach(g=>{ headerSlots+=`<th colspan="${g.count}" style="background:#1e222b;color:#ff7a1a;font-size:9pt;text-align:center;border-left:2px solid #ff7a1a44;padding:3pt 4pt">${g.label}</th>`; });
+    headerSlots+=`</tr><tr><th style="background:#13161e"></th>`;
+    for(let i=0;i<slotCount;i++){
+      const d=new Date(minMs+i*unitMs);
+      headerSlots+=`<th style="background:${i%2===0?"#13161e":"#191d27"};color:#8a93a6;font-size:7.5pt;font-family:monospace;text-align:center;padding:2pt 1pt;min-width:24pt">${String(d.getHours()).padStart(2,"0")}h</th>`;
+    }
+    headerSlots+="</tr>";
+  } else {
+    headerSlots+=`<tr><th style="width:200px;min-width:160px;background:#1e222b;color:#8a93a6;font-size:9pt;padding:4pt 6pt">Tarea</th>`;
+    for(let i=0;i<slotCount;i++){
+      const d=new Date(minMs+i*unitMs);
+      const isWe=d.getDay()===0||d.getDay()===6;
+      const dow=d.toLocaleDateString("es-AR",{weekday:"short"}).toUpperCase().slice(0,3);
+      headerSlots+=`<th style="background:${isWe?"#241c10":"#1e222b"};color:${isWe?"#ff9a4a":"#ff7a1a"};font-size:8pt;text-align:center;padding:3pt 1pt;min-width:${rangeDays<=10?"34pt":"20pt"}"><span style="font-size:6.5pt;display:block;opacity:.7">${dow}</span><b>${d.getDate()}</b><span style="font-size:6.5pt;display:block;opacity:.7">${d.toLocaleDateString("es-AR",{month:"short"}).toUpperCase().slice(0,3)}</span></th>`;
+    }
+    headerSlots+="</tr>";
+  }
+
+  let taskRows="";
+  tasks.forEach((t,idx)=>{
+    const tStartMs=parseD(t.start).getTime();
+    const tEndMs=tStartMs+durToHours(t)*3600000;
+    const startSlot=(tStartMs-minMs)/unitMs;
+    const endSlot=(tEndMs-minMs)/unitMs;
+    const durSlots=Math.max(0.5,endSlot-startSlot);
+    const color=tColor(idx);
+    const before=Math.floor(Math.max(0,startSlot));
+    const bar=Math.max(1,Math.ceil(durSlots));
+    const after=Math.max(0,slotCount-before-bar);
+    let cells="";
+    if(before>0) cells+=`<td colspan="${before}" style="background:#0f1115;border-color:#1a1d25"></td>`;
+    cells+=`<td colspan="${bar}" style="background:${color};border-radius:4pt;padding:2pt 5pt;font-size:7.5pt;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.critical?"outline:2pt solid #ffd97a;outline-offset:-2pt":""}${(t.done||t.status==="hecho")?"opacity:.45;text-decoration:line-through":""}">${esc(t.name)}</td>`;
+    if(after>0) cells+=`<td colspan="${after}" style="background:#0f1115;border-color:#1a1d25"></td>`;
+    taskRows+=`<tr>
+      <td style="background:#171a21;color:${t.critical?"#ffd97a":"#e7eaf0"};font-size:8pt;padding:3pt 6pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:2px solid #2a2f3a">
+        <span style="color:#8a93a6;font-family:monospace;font-size:7pt;margin-right:4pt">${esc(t.id||"")}</span>${esc(t.name)}${t.critical?` <span style="color:#ffd97a;font-size:7pt">⚡</span>`:""}
+      </td>${cells}</tr>`;
+    (t.subtasks||[]).filter(s=>s.start).forEach(s=>{
+      const sS=parseD(s.start).getTime(),sE=sS+durToHours(s)*3600000;
+      const sBefore=Math.floor(Math.max(0,(sS-minMs)/unitMs));
+      const sBar=Math.max(1,Math.ceil(Math.max(0.5,(sE-sS)/unitMs)));
+      const sAfter=Math.max(0,slotCount-sBefore-sBar);
+      let sc="";
+      if(sBefore>0) sc+=`<td colspan="${sBefore}" style="background:#0c0e13;border-color:#1a1d25"></td>`;
+      sc+=`<td colspan="${sBar}" style="background:${color}88;border-radius:3pt;padding:1pt 4pt;font-size:7pt;font-weight:600;color:#fff;opacity:${s.done?0.4:1}">${esc(s.name)}</td>`;
+      if(sAfter>0) sc+=`<td colspan="${sAfter}" style="background:#0c0e13;border-color:#1a1d25"></td>`;
+      taskRows+=`<tr><td style="background:#0f1115;color:#8a93a6;font-size:7pt;padding:1pt 6pt 1pt 18pt;border-right:2px solid #2a2f3a">↳ ${esc(s.name)}</td>${sc}</tr>`;
+    });
+  });
+
+  const allMilestones=[...(STATE.milestones||[]).map(m=>({name:m.name,at:m.at})),...(STATE.tasks||[]).filter(t=>t.isMilestone).map(t=>({name:t.name,at:t.start}))].filter(m=>m.at);
+  let milestoneRows="";
+  if(allMilestones.length){
+    milestoneRows=`<tr><td colspan="${slotCount+1}" style="background:#181a22;padding:3pt 6pt;font-size:8pt;color:#ff7a1a;font-weight:700;border-top:2px solid #ff7a1a44">◆ HITOS</td></tr>`;
+    allMilestones.forEach(m=>{
+      const mMs=parseD(m.at).getTime();
+      const mSlot=Math.min(slotCount-1,Math.max(0,Math.round((mMs-minMs)/unitMs)));
+      const mBefore=mSlot, mAfter=Math.max(0,slotCount-mBefore-1);
+      let mc="";
+      if(mBefore>0) mc+=`<td colspan="${mBefore}" style="background:#0f1115;border-color:#1a1d25"></td>`;
+      mc+=`<td style="background:#ff7a1a;color:#111;font-size:8pt;font-weight:900;text-align:center;padding:2pt">◆</td>`;
+      if(mAfter>0) mc+=`<td colspan="${mAfter}" style="background:#0f1115;border-color:#1a1d25"></td>`;
+      milestoneRows+=`<tr><td style="background:#181a22;color:#ff7a1a;font-size:7.5pt;padding:2pt 6pt;border-right:2px solid #ff7a1a44">◆ ${esc(m.name)}</td>${mc}</tr>`;
+    });
+  }
+
+  const fecha=new Date().toLocaleString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>${esc(p.name||"Montaje")} — Gantt</title>
+<style>
+  @page{size:A4 landscape;margin:8mm}
+  body{font-family:-apple-system,"Segoe UI",Arial,sans-serif;background:#0f1115;color:#e7eaf0;margin:0;padding:0}
+  h1{font-size:15pt;color:#ff7a1a;margin:0 0 2pt;letter-spacing:.3pt}
+  .hdr{display:flex;justify-content:space-between;align-items:flex-end;padding:5pt 8pt;border-bottom:2px solid #ff7a1a44;margin-bottom:5pt}
+  .hdr-left .sub{font-size:8.5pt;color:#8a93a6;margin-top:2pt}
+  .hdr-right{text-align:right;font-size:8pt;color:#8a93a6;font-family:monospace}
+  table{width:100%;border-collapse:collapse;font-size:9pt;table-layout:fixed}
+  th,td{padding:2pt 1pt;border:1px solid #1a1d25;vertical-align:middle;overflow:hidden}
+  .legend{display:flex;gap:10pt;flex-wrap:wrap;margin-top:5pt;padding:3pt 8pt;border-top:1px solid #1e222b;font-size:7.5pt;color:#8a93a6}
+  .legend .li{display:inline-flex;align-items:center;gap:4pt}
+  .legend .sw{display:inline-block;width:9pt;height:9pt;border-radius:2pt}
+  .btn-print{position:fixed;top:8px;right:8px;background:#ff7a1a;color:#111;border:0;padding:7px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px;z-index:100}
+  @media print{.btn-print{display:none!important}}
+</style></head><body>
+<button class="btn-print" onclick="window.print()">🖨 Imprimir / PDF</button>
+<div class="hdr">
+  <div class="hdr-left">
+    <h1>${esc(p.name||"Montaje en sitio")}</h1>
+    <div class="sub">${p.location?esc(p.location)+" · ":""}${fmtD(parseD(p.start))} → ${fmtD(parseD(p.end))} &nbsp;·&nbsp; ${tasks.length} tareas</div>
+  </div>
+  <div class="hdr-right">ANIMAL PROYECTOS<br>Generado: ${fecha}</div>
+</div>
+<table><thead>${headerSlots}</thead><tbody>${taskRows}${milestoneRows}</tbody></table>
+<div class="legend">
+  <span class="li"><span class="sw" style="background:#ffd97a;outline:2pt solid #ffd97a"></span>Crítica ⚡</span>
+  <span class="li"><span class="sw" style="background:#4f86c6;opacity:.4"></span>Completada</span>
+  <span class="li"><span class="sw" style="background:#ff7a1a"></span>Hito ◆</span>
+  <span style="margin-left:auto">1 columna = 1 ${useHours?"hora":"día"} · Rango total: ${rangeDays.toFixed(1)} días</span>
+</div>
+</body></html>`;
+}
+
 function setJornada24(){ STATE.project.dayStart="00:00"; STATE.project.dayEnd="23:59"; syncInputs(); save(); render(); }
 function setJornadaDefault(){ STATE.project.dayStart="07:00"; STATE.project.dayEnd="22:00"; syncInputs(); save(); render(); }
 
